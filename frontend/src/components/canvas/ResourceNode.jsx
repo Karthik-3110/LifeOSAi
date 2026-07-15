@@ -1,7 +1,8 @@
+import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import Badge from '../ui/Badge.jsx'
 
-export default function ResourceNode({ data, selected }) {
+function ResourceNode({ data, selected }) {
   return (
     <div className={`min-w-52 rounded-2xl border bg-bg-surface p-4 shadow-xl ${selected ? 'border-node-resource' : 'border-node-resource/40'}`}>
       <Handle type="target" position={Position.Top} className="!bg-node-resource" />
@@ -12,3 +13,5 @@ export default function ResourceNode({ data, selected }) {
     </div>
   )
 }
+
+export default memo(ResourceNode)

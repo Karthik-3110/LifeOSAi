@@ -38,6 +38,7 @@ const brainDumpSchema = new Schema(
 );
 
 brainDumpSchema.index({ userId: 1, createdAt: -1 });
+brainDumpSchema.index({ userId: 1, createdAt: -1, _id: -1 });
 
 const BrainDump = mongoose.model("BrainDump", brainDumpSchema);
 

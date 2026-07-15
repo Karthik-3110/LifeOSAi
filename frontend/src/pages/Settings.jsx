@@ -21,7 +21,6 @@ export default function Settings() {
     try {
       const updated = await api.updateMe(body)
       setUser(updated)
-      await refreshUser()
     } catch (currentError) {
       setError(currentError.message)
     } finally {

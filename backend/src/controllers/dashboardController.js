@@ -53,7 +53,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
       },
     ]),
     Goal.find({ userId: req.user._id, status: { $ne: "archived" } })
-      .select("title description priority category progress dueDate status createdAt")
+      .select("title priority category progress dueDate status createdAt")
       .sort({ dueDate: 1, _id: -1 })
       .limit(6)
       .lean(),

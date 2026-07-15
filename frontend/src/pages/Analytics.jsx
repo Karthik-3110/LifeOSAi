@@ -3,35 +3,31 @@ import Card from '../components/ui/Card.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
 import WeeklyProgressChart from '../components/analytics/WeeklyProgressChart.jsx'
 import DeadlineHeatmap from '../components/analytics/DeadlineHeatmap.jsx'
-import { api } from '../lib/api.js'
+import { useAppData } from '../context/useAppData.js'
 
 export default function Analytics() {
-  const [analytics, setAnalytics] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { cache, loading: dataLoading, ensureAnalytics } = useAppData()
   const [error, setError] = useState('')
+  const analytics = cache.analytics
+  const loading = !analytics && dataLoading.analytics
 
   useEffect(() => {
-    async function loadAnalytics() {
-      setLoading(true)
-      setError('')
-      try {
-        setAnalytics(await api.analytics())
-      } catch (currentError) {
-        setError(currentError.message)
-      } finally {
-        setLoading(false)
-      }
+    if (!analytics) {
+      ensureAnalytics().catch((currentError) => setError(currentError.message))
     }
-
-    loadAnalytics()
-  }, [])
+  }, [analytics, ensureAnalytics])
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="font-display text-3xl font-bold text-text-primary sm:text-4xl">Your momentum, in numbers.</h1>
       <p className="mt-2 text-text-secondary">Last 6 months across goals, tasks, and focus.</p>
       {error && <div className="mt-6 rounded-xl border border-node-deadline/30 bg-node-deadline/10 px-4 py-3 text-sm text-node-deadline">{error}</div>}
-      {loading && <p className="mt-6 text-text-secondary">Loading analytics...</p>}
+      {loading && (
+        <div className="mt-6 grid gap-4 md:grid-cols-2" aria-label="Loading analytics">
+          <div className="h-28 animate-pulse rounded-2xl border border-border-subtle bg-bg-surface" />
+          <div className="h-28 animate-pulse rounded-2xl border border-border-subtle bg-bg-surface" />
+        </div>
+      )}
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <StatCard label="Goal completion" value={`${analytics?.completionRate ?? 0}%`} delta={`${analytics?.taskTotals?.completed ?? 0} completed`} />
         <StatCard label="Readiness score" value={`${analytics?.readinessScore ?? 0}/100`} delta={`${analytics?.goalTotals?.active ?? 0} active goals`} />

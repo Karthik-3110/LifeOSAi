@@ -1,9 +1,10 @@
+import { memo } from 'react'
 import { CSS } from '@dnd-kit/utilities'
 import { useSortable } from '@dnd-kit/sortable'
 import { Check, Trash2 } from 'lucide-react'
 import Badge from '../ui/Badge.jsx'
 
-export default function TaskCard({ task, onDelete, onToggle }) {
+function TaskCard({ task, onDelete, onToggle }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -55,3 +56,5 @@ export default function TaskCard({ task, onDelete, onToggle }) {
     </div>
   )
 }
+
+export default memo(TaskCard)

@@ -1,10 +1,12 @@
+import { memo, useMemo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Plus } from 'lucide-react'
 import TaskCard from './TaskCard.jsx'
 
-export default function DayColumn({ day, tasks, onAdd, onDelete, onToggle }) {
+function DayColumn({ day, tasks, onAdd, onDelete, onToggle }) {
   const { setNodeRef, isOver } = useDroppable({ id: day.id })
+  const taskIds = useMemo(() => tasks.map((task) => task.id), [tasks])
 
   return (
     <section
@@ -20,7 +22,7 @@ export default function DayColumn({ day, tasks, onAdd, onDelete, onToggle }) {
         </div>
         <span className="rounded-full border border-border-subtle px-2 py-1 font-mono text-xs text-text-secondary">{tasks.length}</span>
       </div>
-      <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
         <div className="mt-5 space-y-3">
           {tasks.map((task) => (
             <TaskCard key={task.id} task={task} onDelete={onDelete} onToggle={onToggle} />
@@ -33,3 +35,5 @@ export default function DayColumn({ day, tasks, onAdd, onDelete, onToggle }) {
     </section>
   )
 }
+
+export default memo(DayColumn)

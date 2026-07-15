@@ -20,7 +20,8 @@ import ResourceNode from '../components/canvas/ResourceNode.jsx'
 import AssistantPanel from '../components/canvas/AssistantPanel.jsx'
 import BillingPanel from '../components/settings/BillingPanel.jsx'
 import { useAuth } from '../context/useAuth.js'
-import { api } from '../lib/api.js'
+import { useAppData } from '../context/useAppData.js'
+import { buildPlannerDays } from '../lib/planner.js'
 import logoImage from '../assets/logo.png'
 
 const palette = [
@@ -34,28 +35,44 @@ const actionableNodeTypes = new Set(['goal', 'task', 'deadline'])
 
 export default function Canvas() {
   const { setUser, user } = useAuth()
+  const {
+    cache,
+    loading: dataLoading,
+    ensureBrainDumps,
+    ensureCanvas,
+    ensureAnalytics,
+    ensurePlannerWeek,
+    setCanvasDraft,
+    saveCanvas: saveCachedCanvas,
+    createBrainDump,
+    renameBrainDump: renameCachedBrainDump,
+    deleteBrainDump: deleteCachedBrainDump,
+    duplicateBrainDump: duplicateCachedBrainDump,
+    restoreBrainDump: restoreCachedBrainDump,
+  } = useAppData()
   const [searchParams, setSearchParams] = useSearchParams()
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [assistantOpen, setAssistantOpen] = useState(true)
-  const [brainDumps, setBrainDumps] = useState([])
   const [activeBrainDumpId, setActiveBrainDumpId] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [brainDumpOpen, setBrainDumpOpen] = useState(false)
   const [billingOpen, setBillingOpen] = useState(false)
   const [brainDumpInput, setBrainDumpInput] = useState('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
   const [saveStatus, setSaveStatus] = useState('Saved')
   const [selectedNodeId, setSelectedNodeId] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
   const nodeCounter = useRef(0)
   const loaded = useRef(false)
+  const skipNextSave = useRef(false)
   const history = useRef([])
   const future = useRef([])
   const nodeTypes = useMemo(() => ({ goal: GoalNode, task: TaskNode, deadline: DeadlineNode, resource: ResourceNode }), [])
 
+  const brainDumps = cache.brainDumps || []
   const activeBrainDump = brainDumps.find((item) => item._id === activeBrainDumpId)
+  const loading = dataLoading.brainDumps || Boolean(activeBrainDumpId && dataLoading[`canvas:${activeBrainDumpId}`])
   const hasBrainDumpAccess = (user?.brainDumpCredits ?? 0) > 0
     || (user?.unlimitedBrainDumpsUntil && new Date(user.unlimitedBrainDumpsUntil) > new Date())
   const actionableNodes = useMemo(() => nodes.filter((node) => actionableNodeTypes.has(node.type)), [nodes])
@@ -72,15 +89,16 @@ export default function Canvas() {
     if (!brainDumpId) {
       setNodes([])
       setEdges([])
+      setActiveBrainDumpId('')
       loaded.current = true
       return
     }
 
     loaded.current = false
-    setLoading(true)
     setError('')
     try {
-      const canvas = await api.getCanvasByBrainDump(brainDumpId)
+      const canvas = await ensureCanvas(brainDumpId)
+      skipNextSave.current = true
       setNodes(canvas.nodes || [])
       setEdges(canvas.edges || [])
       setActiveBrainDumpId(brainDumpId)
@@ -91,25 +109,19 @@ export default function Canvas() {
       loaded.current = true
     } catch (currentError) {
       setError(currentError.message)
-    } finally {
-      setLoading(false)
     }
-  }, [setEdges, setNodes, setSearchParams])
+  }, [ensureCanvas, setEdges, setNodes, setSearchParams])
 
   const loadBrainDumps = useCallback(async (preferredId = '') => {
-    setLoading(true)
     setError('')
     try {
-      const data = await api.listBrainDumps()
-      const items = data.items || []
-      setBrainDumps(items)
+      const items = await ensureBrainDumps()
       const nextId = preferredId && items.some((item) => item._id === preferredId) ? preferredId : items[0]?._id || ''
       await loadCanvas(nextId)
     } catch (currentError) {
       setError(currentError.message)
-      setLoading(false)
     }
-  }, [loadCanvas])
+  }, [ensureBrainDumps, loadCanvas])
 
   useEffect(() => {
     if (searchParams.get('buyCredits')) {
@@ -122,10 +134,15 @@ export default function Canvas() {
 
   useEffect(() => {
     if (!loaded.current || !activeBrainDumpId) return undefined
+    if (skipNextSave.current) {
+      skipNextSave.current = false
+      return undefined
+    }
     setSaveStatus('Saving...')
+    setCanvasDraft(activeBrainDumpId, nodes, edges)
     const timeout = window.setTimeout(async () => {
       try {
-        await api.saveBrainDumpCanvas(activeBrainDumpId, { nodes, edges })
+        await saveCachedCanvas(activeBrainDumpId, nodes, edges)
         setSaveStatus('Saved')
       } catch (currentError) {
         setSaveStatus('Save failed')
@@ -134,7 +151,7 @@ export default function Canvas() {
     }, 700)
 
     return () => window.clearTimeout(timeout)
-  }, [activeBrainDumpId, edges, nodes])
+  }, [activeBrainDumpId, edges, nodes, saveCachedCanvas, setCanvasDraft])
 
   const onConnect = useCallback((params) => {
     if (!activeBrainDumpId) {
@@ -190,14 +207,14 @@ export default function Canvas() {
     setAiLoading(true)
     setError('')
     try {
-      const result = await api.brainDump(input)
+      const result = await createBrainDump(input)
       setUser((current) => current ? { ...current, ...result.credits } : current)
       setBrainDumpInput('')
       setBrainDumpOpen(false)
       if ((result.credits?.brainDumpCredits ?? 0) <= 0 && !result.credits?.unlimitedBrainDumpsUntil) {
         setBillingOpen(true)
       }
-      await loadBrainDumps(result.brainDump._id)
+      await loadCanvas(result.brainDump._id)
     } catch (currentError) {
       if (currentError.code === 'CREDITS_EXHAUSTED') {
         setBillingOpen(true)
@@ -222,7 +239,7 @@ export default function Canvas() {
       ),
     )
     try {
-      await api.listTasks('?limit=200')
+      await ensurePlannerWeek(buildPlannerDays())
     } catch (currentError) {
       setError(currentError.message)
     } finally {
@@ -240,7 +257,7 @@ export default function Canvas() {
     setAiLoading(true)
     const id = 'resource-readiness'
     try {
-      const analytics = await api.analytics()
+      const analytics = await ensureAnalytics()
       setNodes((currentNodes) => {
         if (currentNodes.some((node) => node.id === id)) {
           return currentNodes.map((node) => (
@@ -294,7 +311,7 @@ export default function Canvas() {
     setSaveStatus('Saving...')
     setError('')
     try {
-      await api.saveBrainDumpCanvas(activeBrainDumpId, { nodes, edges })
+      await saveCachedCanvas(activeBrainDumpId, nodes, edges)
       setSaveStatus('Saved')
     } catch (currentError) {
       setSaveStatus('Save failed')
@@ -333,8 +350,7 @@ export default function Canvas() {
     const title = window.prompt('Brain Dump name', item.title)
     if (!title?.trim()) return
     try {
-      const updated = await api.renameBrainDump(item._id, title.trim())
-      setBrainDumps((current) => current.map((brainDump) => (brainDump._id === item._id ? { ...brainDump, ...updated } : brainDump)))
+      await renameCachedBrainDump(item._id, title.trim())
     } catch (currentError) {
       setError(currentError.message)
     }
@@ -343,8 +359,11 @@ export default function Canvas() {
   const deleteBrainDump = async (item) => {
     if (!window.confirm(`Delete "${item.title}"?`)) return
     try {
-      await api.deleteBrainDump(item._id)
-      await loadBrainDumps(activeBrainDumpId === item._id ? '' : activeBrainDumpId)
+      const nextId = activeBrainDumpId === item._id
+        ? brainDumps.find((brainDump) => brainDump._id !== item._id)?._id || ''
+        : activeBrainDumpId
+      await deleteCachedBrainDump(item._id)
+      await loadCanvas(nextId)
     } catch (currentError) {
       setError(currentError.message)
     }
@@ -352,8 +371,8 @@ export default function Canvas() {
 
   const duplicateBrainDump = async (item) => {
     try {
-      const result = await api.duplicateBrainDump(item._id)
-      await loadBrainDumps(result.brainDump._id)
+      const result = await duplicateCachedBrainDump(item._id)
+      await loadCanvas(result.brainDump._id)
     } catch (currentError) {
       setError(currentError.message)
     }
@@ -362,7 +381,8 @@ export default function Canvas() {
   const restoreBrainDump = async () => {
     if (!activeBrainDumpId) return
     try {
-      const canvas = await api.restoreBrainDump(activeBrainDumpId)
+      const canvas = await restoreCachedBrainDump(activeBrainDumpId)
+      skipNextSave.current = true
       setNodes(canvas.nodes || [])
       setEdges(canvas.edges || [])
       setSaveStatus('Restored')

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CreditCard } from 'lucide-react'
 import { api } from '../../lib/api.js'
 import { useAuth } from '../../context/useAuth.js'
+import { useAppData } from '../../context/useAppData.js'
 import Button from '../ui/Button.jsx'
 import Card from '../ui/Card.jsx'
 
@@ -19,26 +20,17 @@ function loadRazorpay() {
 
 export default function BillingPanel({ bare = false, compact = false, onPurchased }) {
   const { setUser, user } = useAuth()
-  const [billing, setBilling] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const { cache, loading: dataLoading, ensureBilling, refreshBilling } = useAppData()
   const [buying, setBuying] = useState('')
   const [error, setError] = useState('')
-
-  const loadBilling = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      setBilling(await api.billing())
-    } catch (currentError) {
-      setError(currentError.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const billing = cache.billing
+  const loading = !billing && dataLoading.billing
 
   useEffect(() => {
-    loadBilling()
-  }, [loadBilling])
+    if (!billing) {
+      ensureBilling().catch((currentError) => setError(currentError.message))
+    }
+  }, [billing, ensureBilling])
 
   const buyPlan = async (planId) => {
     setBuying(planId)
@@ -66,7 +58,7 @@ export default function BillingPanel({ bare = false, compact = false, onPurchase
             try {
               const verified = await api.verifyBillingPayment({ planId, ...response })
               setUser(verified.user)
-              await loadBilling()
+              await refreshBilling()
               onPurchased?.(verified.user)
               resolve()
             } catch (verifyError) {
@@ -104,7 +96,12 @@ export default function BillingPanel({ bare = false, compact = false, onPurchase
         </div>
       </div>
 
-      {loading && <p className="mt-6 text-text-secondary">Loading plans...</p>}
+      {loading && (
+        <div className="mt-6 grid gap-3 sm:grid-cols-2" aria-label="Loading billing plans">
+          <div className="h-32 animate-pulse rounded-xl border border-border-subtle bg-bg-base" />
+          <div className="h-32 animate-pulse rounded-xl border border-border-subtle bg-bg-base" />
+        </div>
+      )}
       {error && <div className="mt-5 rounded-xl border border-node-deadline/30 bg-node-deadline/10 px-4 py-3 text-sm text-node-deadline">{error}</div>}
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DndContext, KeyboardSensor, PointerSensor, closestCorners, useSensor, useSensors } from '@dnd-kit/core'
 import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { Plus, X } from 'lucide-react'
-import { api } from '../lib/api.js'
+import { useAppData } from '../context/useAppData.js'
+import { buildPlannerDays, getPlannerWeekKey, groupTasksByPlannerDay } from '../lib/planner.js'
 import Button from '../components/ui/Button.jsx'
 import DayColumn from '../components/planner/DayColumn.jsx'
 
@@ -12,44 +13,30 @@ function findContainerId(taskMap, itemId) {
 }
 
 export default function Planner() {
+  const { cache, loading: dataLoading, ensurePlannerWeek, createTask, updateTask, deleteTask: removeTask } = useAppData()
   const [tasksByDay, setTasksByDay] = useState({})
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [taskBox, setTaskBox] = useState({ open: false, dayId: '', title: '' })
   const [savingTask, setSavingTask] = useState(false)
   const taskInputRef = useRef(null)
   const plannerDays = useMemo(() => buildPlannerDays(), [])
+  const weekKey = useMemo(() => getPlannerWeekKey(plannerDays), [plannerDays])
+  const week = cache.plannerWeeks[weekKey]
+  const loading = !week && dataLoading[`planner:${weekKey}`]
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  const loadTasks = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const from = plannerDays[0].dateValue.toISOString()
-      const to = new Date(plannerDays[6].dateValue)
-      to.setHours(23, 59, 59, 999)
-      const data = await api.listTasks(`?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to.toISOString())}&limit=200`)
-      const grouped = Object.fromEntries(plannerDays.map((day) => [day.id, []]))
-
-      data.items.forEach((task) => {
-        const dayId = plannerDays.find((day) => day.key === new Date(task.date).toDateString())?.id
-        if (dayId) grouped[dayId].push(toPlannerTask(task))
-      })
-
-      setTasksByDay(grouped)
-    } catch (currentError) {
-      setError(currentError.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [plannerDays])
+  useEffect(() => {
+    ensurePlannerWeek(plannerDays).catch((currentError) => setError(currentError.message))
+  }, [ensurePlannerWeek, plannerDays])
 
   useEffect(() => {
-    loadTasks()
-  }, [loadTasks])
+    if (week) {
+      setTasksByDay(groupTasksByPlannerDay(week.items, plannerDays))
+    }
+  }, [plannerDays, week])
 
   useEffect(() => {
     if (taskBox.open) {
@@ -81,7 +68,8 @@ export default function Planner() {
       const movedTask = activeItems[activeIndex]
       const insertAt = overIndex >= 0 ? overIndex : overItems.length
 
-      api.updateTask(movedTask._id, { date: plannerDays.find((day) => day.id === overContainer).dateValue.toISOString() })
+      const nextDate = plannerDays.find((day) => day.id === overContainer).dateValue.toISOString()
+      updateTask(movedTask.raw || movedTask, { date: nextDate })
         .catch((currentError) => setError(currentError.message))
 
       return {
@@ -96,13 +84,13 @@ export default function Planner() {
     })
   }
 
-  const openTaskBox = (dayId = plannerDays[0].id) => {
+  const openTaskBox = useCallback((dayId = plannerDays[0].id) => {
     setTaskBox({ open: true, dayId, title: '' })
-  }
+  }, [plannerDays])
 
-  const closeTaskBox = () => {
+  const closeTaskBox = useCallback(() => {
     setTaskBox({ open: false, dayId: '', title: '' })
-  }
+  }, [])
 
   const submitTask = async (event) => {
     event.preventDefault()
@@ -114,16 +102,12 @@ export default function Planner() {
       setSavingTask(true)
       const dayId = taskBox.dayId || plannerDays[0].id
       const day = plannerDays.find((item) => item.id === dayId)
-      const task = await api.createTask({
+      await createTask({
         title,
         type: 'task',
         tag: 'Task',
         date: day.dateValue.toISOString(),
       })
-      setTasksByDay((current) => ({
-        ...current,
-        [dayId]: [...(current[dayId] || []), toPlannerTask(task)],
-      }))
       closeTaskBox()
     } catch (currentError) {
       setError(currentError.message)
@@ -132,30 +116,30 @@ export default function Planner() {
     }
   }
 
-  const deleteTask = async (task) => {
+  const deleteTask = useCallback(async (task) => {
     try {
-      await api.deleteTask(task._id)
+      await removeTask(task.raw || task)
       setTasksByDay((current) => Object.fromEntries(
         Object.entries(current).map(([dayId, tasks]) => [dayId, tasks.filter((item) => item.id !== task.id)]),
       ))
     } catch (currentError) {
       setError(currentError.message)
     }
-  }
+  }, [removeTask])
 
-  const toggleTask = async (task) => {
+  const toggleTask = useCallback(async (task) => {
     try {
-      const updated = await api.updateTask(task._id, { completed: !task.completed })
+      await updateTask(task.raw || task, { completed: !task.completed })
       setTasksByDay((current) => Object.fromEntries(
         Object.entries(current).map(([dayId, tasks]) => [
           dayId,
-          tasks.map((item) => (item.id === task.id ? toPlannerTask(updated) : item)),
+          tasks.map((item) => (item.id === task.id ? { ...item, completed: !task.completed, raw: { ...(item.raw || item), completed: !task.completed } } : item)),
         ]),
       ))
     } catch (currentError) {
       setError(currentError.message)
     }
-  }
+  }, [updateTask])
 
   const selectedTaskDay = plannerDays.find((day) => day.id === taskBox.dayId) || plannerDays[0]
 
@@ -210,7 +194,13 @@ export default function Planner() {
           </form>
         )}
         {error && <div className="mt-6 rounded-xl border border-node-deadline/30 bg-node-deadline/10 px-4 py-3 text-sm text-node-deadline">{error}</div>}
-        {loading && <p className="mt-6 text-text-secondary">Loading planner...</p>}
+        {loading && (
+          <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-7" aria-label="Loading planner">
+            {Array.from({ length: 7 }).map((_, index) => (
+              <div key={index} className="h-24 animate-pulse rounded-2xl border border-border-subtle bg-bg-surface" />
+            ))}
+          </div>
+        )}
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
         <div className="mx-auto mt-8 grid max-w-7xl gap-4 md:grid-cols-2 xl:grid-cols-7">
@@ -228,37 +218,4 @@ export default function Planner() {
       </DndContext>
     </div>
   )
-}
-
-function buildPlannerDays() {
-  const today = new Date()
-  const monday = new Date(today)
-  const day = monday.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  monday.setDate(today.getDate() + diff)
-  monday.setHours(0, 0, 0, 0)
-
-  return Array.from({ length: 7 }, (_, index) => {
-    const dateValue = new Date(monday)
-    dateValue.setDate(monday.getDate() + index)
-    return {
-      id: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][index],
-      label: dateValue.toLocaleDateString(undefined, { weekday: 'short' }),
-      date: dateValue.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      dateValue,
-      key: dateValue.toDateString(),
-    }
-  })
-}
-
-function toPlannerTask(task) {
-  const color = task.type === 'deadline' ? 'deadline' : task.type === 'milestone' ? 'milestone' : 'task'
-  return {
-    id: task._id,
-    _id: task._id,
-    title: task.title,
-    completed: task.completed,
-    meta: task.time || task.tag || task.type,
-    color,
-  }
 }

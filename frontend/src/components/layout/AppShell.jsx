@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { Bell, LogOut, Search } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/useAuth.js'
 import Avatar from '../ui/Avatar.jsx'
 import Logo from '../ui/Logo.jsx'
@@ -14,8 +14,15 @@ export default function AppShell() {
 
   const handleSearch = (event) => {
     setSearch(event.target.value)
-    setNotice(event.target.value ? `Searching for "${event.target.value}"` : '')
   }
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setNotice(search ? `Searching for "${search}"` : '')
+    }, 250)
+
+    return () => window.clearTimeout(timeout)
+  }, [search])
 
   return (
     <div className="min-h-screen bg-bg-base text-text-primary lg:flex">

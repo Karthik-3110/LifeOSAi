@@ -1,8 +1,9 @@
+import { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { CheckCircle2 } from 'lucide-react'
 import Badge from '../ui/Badge.jsx'
 
-export default function TaskNode({ data, selected }) {
+function TaskNode({ data, selected }) {
   const completed = Boolean(data.completed)
 
   return (
@@ -18,3 +19,5 @@ export default function TaskNode({ data, selected }) {
     </div>
   )
 }
+
+export default memo(TaskNode)

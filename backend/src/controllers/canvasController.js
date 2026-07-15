@@ -398,7 +398,7 @@ const getOwnedBrainDump = async (brainDumpId, userId) => {
 
 export const listBrainDumps = asyncHandler(async (req, res) => {
   const items = await BrainDump.find({ userId: req.user._id })
-    .select("title input createdAt")
+    .select("title createdAt")
     .sort({ createdAt: -1, _id: -1 })
     .limit(100)
     .lean();

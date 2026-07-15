@@ -1,8 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Brain, CalendarDays, CheckCircle2, Edit3, Map, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
-import { api } from '../lib/api.js'
+import { useAppData } from '../context/useAppData.js'
 import Badge from '../components/ui/Badge.jsx'
 import Button from '../components/ui/Button.jsx'
 import Card from '../components/ui/Card.jsx'
@@ -19,6 +19,16 @@ function getGreeting() {
 
 export default function Dashboard() {
   const { setUser, user } = useAuth()
+  const {
+    cache,
+    loading: dataLoading,
+    ensureDashboard,
+    createBrainDump,
+    createGoal,
+    updateGoal,
+    deleteGoal: removeGoal,
+    updateTask,
+  } = useAppData()
   const navigate = useNavigate()
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [goalModalOpen, setGoalModalOpen] = useState(false)
@@ -27,39 +37,28 @@ export default function Dashboard() {
   const [editingGoal, setEditingGoal] = useState(null)
   const [brainDumpInput, setBrainDumpInput] = useState('')
   const [brainDumpLoading, setBrainDumpLoading] = useState(false)
-  const [dashboard, setDashboard] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const greeting = useMemo(() => getGreeting(), [])
+  const dashboard = cache.dashboard
+  const loading = !dashboard && (dataLoading.dashboard || dataLoading[`bootstrap:${user?._id}`])
   const hasBrainDumpAccess = (user?.brainDumpCredits ?? 0) > 0
     || (user?.unlimitedBrainDumpsUntil && new Date(user.unlimitedBrainDumpsUntil) > new Date())
 
-  const loadDashboard = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    try {
-      setDashboard(await api.dashboard())
-    } catch (currentError) {
-      setError(currentError.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
   useEffect(() => {
-    loadDashboard()
-  }, [loadDashboard])
+    if (!dashboard) {
+      ensureDashboard().catch((currentError) => setError(currentError.message))
+    }
+  }, [dashboard, ensureDashboard])
 
   const saveGoal = async (payload) => {
     try {
       if (editingGoal) {
-        await api.updateGoal(editingGoal._id, payload)
+        await updateGoal(editingGoal._id, payload)
       } else {
-        await api.createGoal(payload)
+        await createGoal(payload)
       }
       setGoalModalOpen(false)
       setEditingGoal(null)
-      await loadDashboard()
     } catch (currentError) {
       setError(currentError.message)
     }
@@ -72,8 +71,7 @@ export default function Dashboard() {
 
   const completeGoal = async (goal) => {
     try {
-      await api.updateGoal(goal._id, { status: 'done', progress: 100 })
-      await loadDashboard()
+      await updateGoal(goal._id, { status: 'done', progress: 100 })
     } catch (currentError) {
       setError(currentError.message)
     }
@@ -81,8 +79,7 @@ export default function Dashboard() {
 
   const deleteGoal = async (goal) => {
     try {
-      await api.deleteGoal(goal._id)
-      await loadDashboard()
+      await removeGoal(goal)
     } catch (currentError) {
       setError(currentError.message)
     }
@@ -103,11 +100,10 @@ export default function Dashboard() {
     setBrainDumpLoading(true)
     setError('')
     try {
-      const result = await api.brainDump(input)
+      const result = await createBrainDump(input)
       setUser((current) => current ? { ...current, ...result.credits } : current)
       setBrainDumpInput('')
       setBrainDumpOpen(false)
-      await loadDashboard()
       const buyCredits = (result.credits?.brainDumpCredits ?? 0) <= 0 && !result.credits?.unlimitedBrainDumpsUntil
       navigate(`/canvas?brainDump=${result.brainDump._id}${buyCredits ? '&buyCredits=1' : ''}`)
     } catch (currentError) {
@@ -122,8 +118,7 @@ export default function Dashboard() {
 
   const toggleTask = async (task) => {
     try {
-      await api.updateTask(task._id, { completed: !task.completed })
-      await loadDashboard()
+      await updateTask(task, { completed: !task.completed })
     } catch (currentError) {
       setError(currentError.message)
     }
@@ -147,7 +142,13 @@ export default function Dashboard() {
       </div>
 
       {error && <div className="mt-6 rounded-xl border border-node-deadline/30 bg-node-deadline/10 px-4 py-3 text-sm text-node-deadline">{error}</div>}
-      {loading && <p className="mt-6 text-text-secondary">Loading dashboard...</p>}
+      {loading && (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Loading dashboard">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-28 animate-pulse rounded-2xl border border-border-subtle bg-bg-surface" />
+          ))}
+        </div>
+      )}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Active goals" value={stats.activeGoals ?? 0} delta={`${stats.doneGoals ?? 0} done`} />

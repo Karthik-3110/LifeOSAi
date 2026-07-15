@@ -59,6 +59,7 @@ const goalSchema = new Schema(
 
 goalSchema.index({ userId: 1, status: 1, dueDate: 1 });
 goalSchema.index({ userId: 1, _id: -1 });
+goalSchema.index({ userId: 1, dueDate: 1, _id: -1 });
 goalSchema.index({ userId: 1, category: 1, priority: 1 });
 
 const Goal = mongoose.model("Goal", goalSchema);

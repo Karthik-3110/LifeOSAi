@@ -1,27 +1,34 @@
+import { createElement, lazy, Suspense } from 'react'
 import { createBrowserRouter } from 'react-router-dom'
-import Home from './pages/Home.jsx'
-import Auth from './pages/Auth.jsx'
-import Dashboard from './pages/Dashboard.jsx'
-import Canvas from './pages/Canvas.jsx'
-import Planner from './pages/Planner.jsx'
-import Analytics from './pages/Analytics.jsx'
-import Settings from './pages/Settings.jsx'
-import InfoPage from './pages/InfoPage.jsx'
 import AppShell from './components/layout/AppShell.jsx'
+import PageLoader from './components/layout/PageLoader.jsx'
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx'
+
+const homePage = lazy(() => import('./pages/Home.jsx'))
+const authPage = lazy(() => import('./pages/Auth.jsx'))
+const dashboardPage = lazy(() => import('./pages/Dashboard.jsx'))
+const canvasPage = lazy(() => import('./pages/Canvas.jsx'))
+const plannerPage = lazy(() => import('./pages/Planner.jsx'))
+const analyticsPage = lazy(() => import('./pages/Analytics.jsx'))
+const settingsPage = lazy(() => import('./pages/Settings.jsx'))
+const infoPage = lazy(() => import('./pages/InfoPage.jsx'))
+
+function lazyPage(Page) {
+  return <Suspense fallback={<PageLoader />}>{createElement(Page)}</Suspense>
+}
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Home />,
+    element: lazyPage(homePage),
   },
   {
     path: '/auth',
-    element: <Auth />,
+    element: lazyPage(authPage),
   },
   {
     path: '/:slug',
-    element: <InfoPage />,
+    element: lazyPage(infoPage),
   },
   {
     element: <ProtectedRoute />,
@@ -29,12 +36,12 @@ export const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
-          { path: '/dashboard', element: <Dashboard /> },
-          { path: '/canvas', element: <Canvas /> },
-          { path: '/planner', element: <Planner /> },
-          { path: '/analytics', element: <Analytics /> },
-          { path: '/assistant', element: <Canvas /> },
-          { path: '/settings', element: <Settings /> },
+          { path: '/dashboard', element: lazyPage(dashboardPage) },
+          { path: '/canvas', element: lazyPage(canvasPage) },
+          { path: '/planner', element: lazyPage(plannerPage) },
+          { path: '/analytics', element: lazyPage(analyticsPage) },
+          { path: '/assistant', element: lazyPage(canvasPage) },
+          { path: '/settings', element: lazyPage(settingsPage) },
         ],
       },
     ],
