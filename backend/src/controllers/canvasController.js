@@ -3,6 +3,7 @@ import AIHistory from "../models/AIHistory.js";
 import BrainDump from "../models/BrainDump.js";
 import Goal from "../models/Goal.js";
 import Note from "../models/Note.js";
+import Task from "../models/Task.js";
 import User from "../models/User.js";
 import ApiError from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
@@ -11,6 +12,11 @@ import asyncHandler from "../utils/asyncHandler.js";
 const taskKeywords = /\b(todo|task|need to|must|should|call|email|write|ship|finish|fix|create|build|send|review|schedule)\b/i;
 const goalKeywords = /\b(goal|want to|aim|objective|launch|become|learn|grow|improve|complete)\b/i;
 const deadlineKeywords = /\b(deadline|due|by|before|tomorrow|today|next week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+const habitKeywords = /\b(every day|daily|morning|night|routine|habit|gym|workout|meditate|sleep|wake up|practice)\b/i;
+const examKeywords = /\b(exam|semester|midterm|final|test|quiz|interview|viva)\b/i;
+const projectKeywords = /\b(project|assignment|portfolio|app|website|lifeos|build|complete|ship)\b/i;
+const peopleKeywords = /\b(?:with|call|meet|message|email|ask|tell)\s+([A-Z][a-z]+|[a-z]{3,})\b/g;
+const knownSubjects = ["DSA", "DBMS", "OS", "React", "JavaScript", "Math", "Physics", "Chemistry", "Biology", "English", "CN", "SQL", "MongoDB", "Node", "Express"];
 
 const startOfToday = () => {
   const date = new Date();
@@ -107,6 +113,108 @@ const categorize = (text) => {
   return categories.length ? categories : ["general"];
 };
 
+const uniqueByTitle = (items = []) => {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = String(item.title || item.name || item.label || "").toLowerCase().trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const extractSubjects = (input, sentences) => {
+  const lower = input.toLowerCase();
+  const subjects = knownSubjects
+    .filter((subject) => lower.includes(subject.toLowerCase()))
+    .map((subject) => ({
+      title: subject,
+      priority: examKeywords.test(input) || lower.includes("interview") ? "high" : "medium",
+      focus: sentences.find((sentence) => sentence.toLowerCase().includes(subject.toLowerCase())) || `Study ${subject}`,
+    }));
+
+  return uniqueByTitle(subjects);
+};
+
+const extractPeople = (input) => {
+  const people = [];
+  let match = peopleKeywords.exec(input);
+  while (match) {
+    people.push({ title: match[1], relationship: "mentioned" });
+    match = peopleKeywords.exec(input);
+  }
+  peopleKeywords.lastIndex = 0;
+  return uniqueByTitle(people).slice(0, 8);
+};
+
+const buildStudentInsights = (input, tasks, goals, notes) => {
+  const sentences = splitThoughts(input);
+  const subjects = extractSubjects(input, sentences);
+  const projects = uniqueByTitle(sentences
+    .filter((sentence) => projectKeywords.test(sentence))
+    .map((sentence) => ({ title: sentence.slice(0, 120), status: "active" })))
+    .slice(0, 8);
+  const habits = uniqueByTitle(sentences
+    .filter((sentence) => habitKeywords.test(sentence))
+    .map((sentence) => ({ title: sentence.slice(0, 120), recurring: sentence.toLowerCase().includes("weekly") ? "weekly" : "daily" })))
+    .slice(0, 8);
+  const exams = uniqueByTitle(sentences
+    .filter((sentence) => examKeywords.test(sentence))
+    .map((sentence) => ({ title: sentence.slice(0, 120), dueDate: parseDueDate(sentence), priority: "high" })))
+    .slice(0, 8);
+  const events = uniqueByTitle(sentences
+    .filter((sentence) => /\b(lecture|class|event|meeting|seminar|workshop)\b/i.test(sentence))
+    .map((sentence) => ({ title: sentence.slice(0, 120), date: parseDueDate(sentence) })))
+    .slice(0, 8);
+  const people = extractPeople(input);
+  const dependencies = tasks
+    .slice(1, 10)
+    .map((task, index) => ({
+      title: `${tasks[index].title} before ${task.title}`,
+      sourceIndex: index,
+      targetIndex: index + 1,
+    }));
+
+  const studyTargets = subjects.length ? subjects : goals.slice(0, 4).map((goal) => ({ title: goal.title, priority: goal.priority }));
+  const today = startOfToday();
+  const timeline = tasks.slice(0, 10).map((task, index) => ({
+    title: task.title,
+    date: (task.dueDate || addDays(today, index + 1)).toISOString(),
+    type: task.type || "task",
+  }));
+  const studyPlan = studyTargets.slice(0, 6).map((item, index) => ({
+    title: item.title,
+    cadence: index < 2 ? "daily" : "alternate days",
+    method: index % 2 === 0 ? "Concept review + active recall" : "Practice + mistake review",
+    minutes: item.priority === "high" ? 90 : 45,
+  }));
+  const weeklyPlan = Array.from({ length: 7 }, (_, index) => {
+    const task = tasks[index % Math.max(tasks.length, 1)];
+    const subject = studyTargets[index % Math.max(studyTargets.length, 1)];
+    return {
+      dayOffset: index,
+      title: task?.title || subject?.title || "Focused study block",
+      focus: subject?.title || task?.category || "General",
+      minutes: index < 5 ? 60 : 45,
+    };
+  });
+
+  return {
+    subjects,
+    projects,
+    habits,
+    exams,
+    events,
+    people,
+    dependencies,
+    timeline,
+    studyPlan,
+    weeklyPlan,
+    upcomingEvents: [...events, ...exams].slice(0, 10),
+    notes,
+  };
+};
+
 const normalizePriority = (value) => (["low", "medium", "high"].includes(value) ? value : "medium");
 
 const toValidDate = (value) => {
@@ -120,29 +228,48 @@ const normalizeRoadmap = (roadmap, input) => {
   const tasks = Array.isArray(roadmap?.tasks) && roadmap.tasks.length ? roadmap.tasks : fallback.tasks;
   const goals = Array.isArray(roadmap?.goals) && roadmap.goals.length ? roadmap.goals : fallback.goals;
   const notes = Array.isArray(roadmap?.notes) && roadmap.notes.length ? roadmap.notes : fallback.notes;
+  const normalizedTasks = tasks.slice(0, 28).map((task, index) => ({
+    title: String(task.title || task.name || `Task ${index + 1}`).slice(0, 180),
+    type: task.type === "deadline" ? "deadline" : task.type === "milestone" ? "milestone" : "task",
+    category: String(task.category || task.tag || "general").slice(0, 80),
+    priority: normalizePriority(task.priority),
+    dueDate: toValidDate(task.dueDate) || parseDueDate(String(task.title || "")) || addDays(startOfToday(), Math.min(index + 1, 7)),
+    estimatedTime: Number.isFinite(Number(task.estimatedTime)) ? Math.min(Math.max(Number(task.estimatedTime), 0), 1440) : 45,
+    recurring: ["none", "daily", "weekly", "monthly"].includes(task.recurring) ? task.recurring : "none",
+    progress: Number.isFinite(Number(task.progress)) ? Math.min(Math.max(Number(task.progress), 0), 100) : 0,
+    sourceIndex: index,
+  }));
+  const normalizedGoals = goals.slice(0, 12).map((goal, index) => ({
+    title: String(goal.title || goal.name || `Goal ${index + 1}`).slice(0, 180),
+    description: String(goal.description || "").slice(0, 2000),
+    category: String(goal.category || "Personal").slice(0, 80),
+    priority: normalizePriority(goal.priority),
+    dueDate: toValidDate(goal.dueDate) || parseDueDate(String(goal.title || "")),
+    sourceIndex: index,
+  }));
+  const normalizedNotes = notes.slice(0, 24).map((note, index) => ({
+    title: String(note.title || note.body || note.text || `Note ${index + 1}`).slice(0, 180),
+    category: String(note.category || "general").slice(0, 80),
+    sourceIndex: index,
+  }));
+  const studentInsights = buildStudentInsights(input, normalizedTasks, normalizedGoals, normalizedNotes);
 
   return {
     title: String(roadmap?.title || goals[0]?.title || input.slice(0, 60) || "Brain Dump").slice(0, 120),
-    tasks: tasks.slice(0, 24).map((task, index) => ({
-      title: String(task.title || task.name || `Task ${index + 1}`).slice(0, 180),
-      type: task.type === "deadline" ? "deadline" : "task",
-      category: String(task.category || task.tag || "general").slice(0, 80),
-      dueDate: toValidDate(task.dueDate) || parseDueDate(String(task.title || "")),
-      sourceIndex: index,
-    })),
-    goals: goals.slice(0, 12).map((goal, index) => ({
-      title: String(goal.title || goal.name || `Goal ${index + 1}`).slice(0, 180),
-      description: String(goal.description || "").slice(0, 2000),
-      category: String(goal.category || "Personal").slice(0, 80),
-      priority: normalizePriority(goal.priority),
-      dueDate: toValidDate(goal.dueDate) || parseDueDate(String(goal.title || "")),
-      sourceIndex: index,
-    })),
-    notes: notes.slice(0, 24).map((note, index) => ({
-      title: String(note.title || note.body || note.text || `Note ${index + 1}`).slice(0, 180),
-      category: String(note.category || "general").slice(0, 80),
-      sourceIndex: index,
-    })),
+    tasks: normalizedTasks,
+    goals: normalizedGoals,
+    notes: normalizedNotes,
+    subjects: Array.isArray(roadmap?.subjects) ? uniqueByTitle(roadmap.subjects).slice(0, 12) : studentInsights.subjects,
+    projects: Array.isArray(roadmap?.projects) ? uniqueByTitle(roadmap.projects).slice(0, 12) : studentInsights.projects,
+    habits: Array.isArray(roadmap?.habits) ? uniqueByTitle(roadmap.habits).slice(0, 12) : studentInsights.habits,
+    exams: Array.isArray(roadmap?.exams) ? uniqueByTitle(roadmap.exams).slice(0, 12) : studentInsights.exams,
+    events: Array.isArray(roadmap?.events) ? uniqueByTitle(roadmap.events).slice(0, 12) : studentInsights.events,
+    people: Array.isArray(roadmap?.people) ? uniqueByTitle(roadmap.people).slice(0, 12) : studentInsights.people,
+    dependencies: Array.isArray(roadmap?.dependencies) ? roadmap.dependencies.slice(0, 16) : studentInsights.dependencies,
+    timeline: Array.isArray(roadmap?.timeline) ? roadmap.timeline.slice(0, 16) : studentInsights.timeline,
+    studyPlan: Array.isArray(roadmap?.studyPlan) ? roadmap.studyPlan.slice(0, 16) : studentInsights.studyPlan,
+    weeklyPlan: Array.isArray(roadmap?.weeklyPlan) ? roadmap.weeklyPlan.slice(0, 14) : studentInsights.weeklyPlan,
+    upcomingEvents: Array.isArray(roadmap?.upcomingEvents) ? roadmap.upcomingEvents.slice(0, 12) : studentInsights.upcomingEvents,
     relationships: Array.isArray(roadmap?.relationships) ? roadmap.relationships : fallback.relationships,
     categories: Array.isArray(roadmap?.categories) ? roadmap.categories.slice(0, 12).map(String) : fallback.categories,
   };
@@ -251,7 +378,7 @@ const analyzeWithGroq = async (input) => {
       messages: [
         {
           role: "system",
-          content: "Turn messy thoughts into JSON with keys title, goals, tasks, notes, relationships, categories. Goals need title, description, priority low|medium|high, category, dueDate. Tasks need title, type task|deadline, category, dueDate. Use ISO dates or null.",
+          content: "Turn messy student thoughts into compact JSON for a second-brain app. Include keys title, goals, tasks, notes, subjects, projects, habits, exams, events, people, dependencies, timeline, studyPlan, weeklyPlan, upcomingEvents, relationships, categories. Goals need title, description, priority low|medium|high, category, dueDate. Tasks need title, type task|deadline|milestone, category, priority, dueDate, estimatedTime minutes, recurring none|daily|weekly|monthly. Use ISO dates or null.",
         },
         { role: "user", content: input },
       ],
@@ -273,21 +400,96 @@ const analyzeWithGroq = async (input) => {
   }
 };
 
-const createCanvasArtifacts = ({ goals, tasks, notes }, existingCount = 0) => {
+const createCanvasArtifacts = ({ goals = [], tasks = [], notes = [], subjects = [], projects = [], habits = [], exams = [], events = [], people = [], dependencies = [], relationships = [] }, existingCount = 0) => {
   const timestamp = Date.now();
   const nodes = [];
   const edges = [];
+  const rootId = `goal-${timestamp}-root`;
+  const rootTitle = goals[0]?.title || subjects[0]?.title || projects[0]?.title || "Second Brain";
 
-  goals.forEach((goal, index) => {
+  nodes.push({
+    id: rootId,
+    type: "goal",
+    position: { x: 80, y: 180 },
+    data: {
+      label: rootTitle,
+      meta: "AI Brain Dump",
+      completed: false,
+      icon: "brain",
+      priority: goals[0]?.priority || "high",
+    },
+  });
+
+  goals.slice(1).forEach((goal, index) => {
+    const nodeId = `goal-${timestamp}-${index}`;
     nodes.push({
-      id: `goal-${timestamp}-${index}`,
+      id: nodeId,
       type: "goal",
-      position: { x: 80 + index * 280, y: 170 },
+      position: { x: 80, y: 420 + index * 160 },
       data: {
         label: goal.title,
         meta: `${goal.category || "Personal"} - ${goal.priority || "medium"}`,
         completed: false,
+        icon: "target",
+        priority: goal.priority || "medium",
       },
+    });
+
+    edges.push({
+      id: `edge-${timestamp}-root-goal-${index}`,
+      source: rootId,
+      target: nodeId,
+      label: "contains",
+      animated: true,
+      style: { stroke: "var(--node-goal)" },
+    });
+  });
+
+  subjects.forEach((subject, index) => {
+    const id = `resource-subject-${timestamp}-${index}`;
+    nodes.push({
+      id,
+      type: "resource",
+      position: { x: 410, y: 90 + index * 145 },
+      data: {
+        label: subject.title || subject.name,
+        meta: subject.focus || "Subject",
+        completed: false,
+        icon: "book",
+        priority: subject.priority || "medium",
+      },
+    });
+    edges.push({
+      id: `edge-${timestamp}-subject-${index}`,
+      source: rootId,
+      target: id,
+      label: "study",
+      animated: true,
+      style: { stroke: "var(--node-resource)" },
+    });
+  });
+
+  projects.forEach((project, index) => {
+    const id = `goal-project-${timestamp}-${index}`;
+    nodes.push({
+      id,
+      type: "goal",
+      position: { x: 720, y: 110 + index * 155 },
+      data: {
+        label: project.title || project.name,
+        meta: project.status || "Project",
+        completed: false,
+        icon: "folder",
+        priority: "high",
+      },
+    });
+    edges.push({
+      id: `edge-${timestamp}-project-${index}`,
+      source: subjects[index % Math.max(subjects.length, 1)] ? `resource-subject-${timestamp}-${index % subjects.length}` : rootId,
+      target: id,
+      label: "applies to",
+      animated: true,
+      style: { stroke: "var(--node-goal)" },
     });
   });
 
@@ -298,7 +500,7 @@ const createCanvasArtifacts = ({ goals, tasks, notes }, existingCount = 0) => {
     nodes.push({
       id,
       type: task.type === "deadline" ? "deadline" : "task",
-      position: { x: 380 + column * 300, y: 90 + row * 190 },
+      position: { x: 1040 + column * 300, y: 90 + row * 180 },
       data: {
         label: task.title,
         meta: task.dueDate instanceof Date && !Number.isNaN(task.dueDate.valueOf())
@@ -306,21 +508,46 @@ const createCanvasArtifacts = ({ goals, tasks, notes }, existingCount = 0) => {
           : task.category,
         completed: false,
         sequence: index + 1,
+        icon: task.type === "deadline" ? "calendar" : "check",
+        priority: task.priority || "medium",
+        estimatedTime: task.estimatedTime,
       },
     });
 
-    if (goals.length) {
-      const previousTask = index > 0
-        ? nodes.find((node) => node.id === `${tasks[index - 1].type === "deadline" ? "deadline" : "task"}-${timestamp}-${index - 1}`)
-        : null;
-      edges.push({
-        id: `edge-${timestamp}-task-${index}`,
-        source: previousTask?.id || nodes[index % goals.length].id,
-        target: id,
-        animated: true,
-        style: { stroke: "var(--node-task)" },
-      });
-    }
+    const previousTaskId = index > 0 ? `${tasks[index - 1].type === "deadline" ? "deadline" : "task"}-${timestamp}-${index - 1}` : null;
+    edges.push({
+      id: `edge-${timestamp}-task-${index}`,
+      source: previousTaskId || (projects.length ? `goal-project-${timestamp}-${index % projects.length}` : rootId),
+      target: id,
+      label: previousTaskId ? "then" : "next action",
+      animated: true,
+      style: { stroke: task.type === "deadline" ? "var(--node-deadline)" : "var(--node-task)" },
+    });
+  });
+
+  [...habits, ...exams, ...events, ...people].slice(0, 16).forEach((item, index) => {
+    const isDeadline = Boolean(item.dueDate || item.date || examKeywords.test(String(item.title || "")));
+    const id = `${isDeadline ? "deadline" : "resource"}-entity-${timestamp}-${index}`;
+    nodes.push({
+      id,
+      type: isDeadline ? "deadline" : "resource",
+      position: { x: 430 + (index % 4) * 280, y: 560 + Math.floor(index / 4) * 150 },
+      data: {
+        label: item.title || item.name,
+        meta: item.recurring || item.relationship || item.priority || "Context",
+        completed: false,
+        icon: isDeadline ? "calendar" : "sparkles",
+        priority: item.priority || "medium",
+      },
+    });
+    edges.push({
+      id: `edge-${timestamp}-entity-${index}`,
+      source: rootId,
+      target: id,
+      label: isDeadline ? "deadline" : "context",
+      animated: true,
+      style: { stroke: isDeadline ? "var(--node-deadline)" : "var(--node-resource)" },
+    });
   });
 
   notes.forEach((note, index) => {
@@ -328,21 +555,58 @@ const createCanvasArtifacts = ({ goals, tasks, notes }, existingCount = 0) => {
     nodes.push({
       id,
       type: "resource",
-      position: { x: 380 + (index % 3) * 300, y: 320 + Math.floor(tasks.length / 4) * 190 + Math.floor(index / 3) * 150 },
+      position: { x: 1040 + (index % 3) * 300, y: 420 + Math.floor(tasks.length / 4) * 180 + Math.floor(index / 3) * 150 },
       data: {
         label: note.title,
         meta: note.category,
         completed: false,
+        icon: "file",
       },
     });
 
-    if (goals.length) {
+    edges.push({
+      id: `edge-${timestamp}-note-${index}`,
+      source: rootId,
+      target: id,
+      label: "note",
+      animated: true,
+      style: { stroke: "var(--node-resource)" },
+    });
+  });
+
+  dependencies.forEach((dependency, index) => {
+    const source = `task-${timestamp}-${dependency.sourceIndex}`;
+    const target = `task-${timestamp}-${dependency.targetIndex}`;
+    if (nodes.some((node) => node.id === source) && nodes.some((node) => node.id === target)) {
       edges.push({
-        id: `edge-${timestamp}-note-${index}`,
-        source: nodes[index % goals.length].id,
-        target: id,
+        id: `edge-${timestamp}-dependency-${index}`,
+        source,
+        target,
+        label: "depends on",
         animated: true,
-        style: { stroke: "var(--node-resource)" },
+        style: { stroke: "var(--accent-signal)" },
+      });
+    }
+  });
+
+  relationships.slice(0, 24).forEach((relationship, index) => {
+    const sourcePool = relationship.sourceType === "task" ? tasks : goals;
+    const targetPool = relationship.targetType === "note" ? notes : tasks;
+    if (!sourcePool?.length || !targetPool?.length) return;
+    const source = relationship.sourceType === "task"
+      ? `${tasks[relationship.sourceIndex]?.type === "deadline" ? "deadline" : "task"}-${timestamp}-${relationship.sourceIndex}`
+      : (relationship.sourceIndex === 0 ? rootId : `goal-${timestamp}-${relationship.sourceIndex - 1}`);
+    const target = relationship.targetType === "note"
+      ? `resource-${timestamp}-${relationship.targetIndex}`
+      : `${tasks[relationship.targetIndex]?.type === "deadline" ? "deadline" : "task"}-${timestamp}-${relationship.targetIndex}`;
+    if (nodes.some((node) => node.id === source) && nodes.some((node) => node.id === target)) {
+      edges.push({
+        id: `edge-${timestamp}-relationship-${index}`,
+        source,
+        target,
+        label: relationship.label || "relates",
+        animated: true,
+        style: { stroke: "var(--border-subtle)" },
       });
     }
   });
@@ -491,6 +755,27 @@ export const analyzeBrainDump = asyncHandler(async (req, res) => {
     { ordered: false }
   );
 
+  const createdTasks = extracted.tasks.length
+    ? await Task.insertMany(
+      extracted.tasks.map((task, index) => ({
+        userId: req.user._id,
+        goalId: createdGoals[index % Math.max(createdGoals.length, 1)]?._id || null,
+        title: task.title,
+        type: task.type,
+        priority: task.priority,
+        category: task.category,
+        tag: task.category || "Brain Dump",
+        date: task.dueDate || addDays(startOfToday(), Math.min(index + 1, 7)),
+        estimatedTime: task.estimatedTime,
+        recurring: task.recurring,
+        progress: task.progress || 0,
+        completed: false,
+        source: "brain-dump",
+      })),
+      { ordered: false }
+    )
+    : [];
+
   const brainDump = await BrainDump.create({
     userId: req.user._id,
     title: extracted.title,
@@ -529,7 +814,7 @@ export const analyzeBrainDump = asyncHandler(async (req, res) => {
     extracted,
     created: {
       goals: createdGoals,
-      tasks: [],
+      tasks: createdTasks,
       notes: createdNotes,
     },
     canvas,

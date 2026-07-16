@@ -37,9 +37,14 @@ export function toPlannerTask(task) {
     _id: task._id,
     title: task.title,
     completed: task.completed,
-    meta: task.time || task.tag || task.type,
+    meta: task.time || task.category || task.tag || task.type,
     color,
     date: task.date,
+    priority: task.priority || 'medium',
+    category: task.category || task.tag || 'General',
+    estimatedTime: task.estimatedTime ?? 45,
+    recurring: task.recurring || 'none',
+    progress: task.progress ?? (task.completed ? 100 : 0),
     raw: task,
   }
 }

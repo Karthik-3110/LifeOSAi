@@ -1,4 +1,5 @@
 import Goal from "../models/Goal.js";
+import BrainDump from "../models/BrainDump.js";
 import Task from "../models/Task.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -17,7 +18,7 @@ const addDays = (date, days) => {
 
 const plannerTaskFilter = {
   $or: [
-    { source: "planner" },
+    { source: { $in: ["planner", "brain-dump"] } },
     { source: { $exists: false }, tag: { $in: ["", "Task"] } },
   ],
 };
@@ -32,6 +33,8 @@ export const getDashboard = asyncHandler(async (req, res) => {
     recentGoals,
     upcomingTasks,
     upcomingGoals,
+    brainDumpCount,
+    todaysTasks,
   ] = await Promise.all([
     Goal.aggregate([
       { $match: { userId: req.user._id } },
@@ -63,7 +66,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
       completed: false,
       date: { $gte: today, $lt: nextWeek },
     })
-      .select("goalId title type tag date time completed source createdAt")
+      .select("goalId title type priority category tag date time estimatedTime recurring progress completed source createdAt")
       .sort({ date: 1, _id: -1 })
       .limit(10)
       .lean(),
@@ -75,6 +78,17 @@ export const getDashboard = asyncHandler(async (req, res) => {
       .select("title dueDate priority category status")
       .sort({ dueDate: 1, _id: -1 })
       .limit(10)
+      .lean(),
+    BrainDump.countDocuments({ userId: req.user._id }),
+    Task.find({
+      userId: req.user._id,
+      ...plannerTaskFilter,
+      completed: false,
+      date: { $gte: today, $lt: addDays(today, 1) },
+    })
+      .select("title priority category estimatedTime date")
+      .sort({ priority: -1, date: 1, _id: -1 })
+      .limit(6)
       .lean(),
   ]);
 
@@ -109,6 +123,11 @@ export const getDashboard = asyncHandler(async (req, res) => {
     .slice(0, 12)
     .map(({ sortDate, ...item }) => item);
 
+  const estimatedWorkload = todaysTasks.reduce((sum, task) => sum + (task.estimatedTime || 45), 0);
+  const completionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
+  const soonestDeadline = upcoming.find((item) => item.type === "deadline" || item.itemType === "goal");
+  const topFocus = todaysTasks[0]?.category || recentGoals[0]?.category || "your highest priority subject";
+
   apiResponse(res, {
     stats: {
       totalGoals,
@@ -118,7 +137,17 @@ export const getDashboard = asyncHandler(async (req, res) => {
       totalTasks,
       completedTasks,
       openTasks: tasksByCompletion.open || 0,
-      completionRate: totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0,
+      completionRate,
+      brainDumpsCreated: brainDumpCount,
+      productivityScore: Math.min(100, Math.round((completionRate * 0.7) + ((goalsByStatus.done || 0) * 6) + Math.min(brainDumpCount, 10))),
+      estimatedWorkload,
+    },
+    dailyBrief: {
+      priorities: todaysTasks.map((task) => task.title).slice(0, 4),
+      estimatedWorkloadMinutes: estimatedWorkload,
+      upcomingDeadlines: upcoming.slice(0, 4),
+      studyRecommendation: `Focus on ${topFocus} today${soonestDeadline ? ` because "${soonestDeadline.title}" is coming up.` : "."}`,
+      productivityScore: Math.min(100, Math.round((completionRate * 0.7) + ((goalsByStatus.done || 0) * 6) + Math.min(brainDumpCount, 10))),
     },
     recentGoals,
     upcomingTasks,

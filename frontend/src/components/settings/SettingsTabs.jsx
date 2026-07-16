@@ -1,4 +1,4 @@
-const tabs = ['Account', 'Security', 'Billing', 'Theme', 'Delete Account']
+const tabs = ['Account', 'Appearance', 'Security', 'Brain Dump', 'Billing', 'Privacy', 'About']
 
 export default function SettingsTabs({ active, onChange }) {
   return (

@@ -10,7 +10,7 @@ import {
   useNodesState,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Brain, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, Copy, Edit3, FileText, Flag, Redo2, RefreshCcw, Save, Target, Trash2, Undo2, X } from 'lucide-react'
+import { Brain, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, Edit3, FileText, Flag, GitBranch, LayoutGrid, Redo2, RefreshCcw, Save, Search, Target, Trash2, Undo2, X } from 'lucide-react'
 import Button from '../components/ui/Button.jsx'
 import Card from '../components/ui/Card.jsx'
 import GoalNode from '../components/canvas/GoalNode.jsx'
@@ -59,6 +59,7 @@ export default function Canvas() {
   const [brainDumpOpen, setBrainDumpOpen] = useState(false)
   const [billingOpen, setBillingOpen] = useState(false)
   const [brainDumpInput, setBrainDumpInput] = useState('')
+  const [brainDumpSearch, setBrainDumpSearch] = useState('')
   const [error, setError] = useState('')
   const [saveStatus, setSaveStatus] = useState('Saved')
   const [selectedNodeId, setSelectedNodeId] = useState(null)
@@ -71,6 +72,7 @@ export default function Canvas() {
   const nodeTypes = useMemo(() => ({ goal: GoalNode, task: TaskNode, deadline: DeadlineNode, resource: ResourceNode }), [])
 
   const brainDumps = cache.brainDumps || []
+  const filteredBrainDumps = brainDumps.filter((item) => item.title.toLowerCase().includes(brainDumpSearch.toLowerCase()))
   const activeBrainDump = brainDumps.find((item) => item._id === activeBrainDumpId)
   const loading = dataLoading.brainDumps || Boolean(activeBrainDumpId && dataLoading[`canvas:${activeBrainDumpId}`])
   const hasBrainDumpAccess = (user?.brainDumpCredits ?? 0) > 0
@@ -391,6 +393,58 @@ export default function Canvas() {
     }
   }
 
+  const autoLayout = () => {
+    if (!nodes.length) return
+    pushHistory()
+    const grouped = nodes.reduce((acc, node) => {
+      const key = node.type || 'resource'
+      acc[key] = [...(acc[key] || []), node]
+      return acc
+    }, {})
+    const order = ['goal', 'resource', 'task', 'deadline']
+    setNodes(order.flatMap((type, column) => (grouped[type] || []).map((node, row) => ({
+      ...node,
+      position: { x: 120 + column * 340, y: 120 + row * 150 },
+    }))))
+  }
+
+  const autoConnect = () => {
+    if (nodes.length < 2) return
+    pushHistory()
+    const goals = nodes.filter((node) => node.type === 'goal')
+    const source = goals[0] || nodes[0]
+    const generated = nodes
+      .filter((node) => node.id !== source.id)
+      .map((node, index) => ({
+        id: `auto-${source.id}-${node.id}-${index}`,
+        source: source.id,
+        target: node.id,
+        label: node.type === 'deadline' ? 'deadline' : node.type === 'task' ? 'next action' : 'relates',
+        animated: true,
+        style: { stroke: 'var(--accent-signal)' },
+      }))
+    setEdges((currentEdges) => {
+      const existing = new Set(currentEdges.map((edge) => `${edge.source}:${edge.target}`))
+      return [...currentEdges, ...generated.filter((edge) => !existing.has(`${edge.source}:${edge.target}`))]
+    })
+  }
+
+  const exportCanvas = () => {
+    const payload = {
+      brainDump: activeBrainDump,
+      nodes,
+      edges,
+      exportedAt: new Date().toISOString(),
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${activeBrainDump?.title || 'lifeos-canvas'}.json`.replace(/[^\w.-]+/g, '-')
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const undo = () => {
     const previous = history.current.pop()
     if (!previous) return
@@ -424,13 +478,22 @@ export default function Canvas() {
           {!sidebarCollapsed && (
             <>
               <p className="mt-3 text-xs text-text-muted">Credits: {user?.brainDumpCredits ?? 0}</p>
+              <label className="mt-3 flex items-center gap-2 rounded-xl border border-border-subtle bg-bg-base px-3 py-2 text-text-secondary">
+                <Search size={15} />
+                <input
+                  value={brainDumpSearch}
+                  onChange={(event) => setBrainDumpSearch(event.target.value)}
+                  placeholder="Search Brain Dumps"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+                />
+              </label>
               {!hasBrainDumpAccess && <Button className="mt-3 w-full" size="sm" onClick={() => setBillingOpen(true)}>Buy Credits</Button>}
             </>
           )}
         </div>
         {!sidebarCollapsed && <div className="max-h-[calc(100vh-15rem)] space-y-2 overflow-y-auto p-3 lg:max-h-[calc(100vh-10rem)]">
-          {brainDumps.length === 0 && <p className="p-3 text-sm text-text-secondary">No Brain Dumps yet.</p>}
-          {brainDumps.map((item) => (
+          {filteredBrainDumps.length === 0 && <p className="p-3 text-sm text-text-secondary">No matching Brain Dumps.</p>}
+          {filteredBrainDumps.map((item) => (
             <div key={item._id} className={`rounded-xl border p-3 transition ${item._id === activeBrainDumpId ? 'border-accent-signal bg-accent-signal/10' : 'border-border-subtle bg-bg-base hover:bg-bg-surface-hi'}`}>
               <button onClick={() => loadCanvas(item._id)} className="w-full text-left">
                 <p className="truncate text-sm font-semibold text-text-primary">{item.title}</p>
@@ -458,6 +521,9 @@ export default function Canvas() {
           <Button variant="secondary" size="sm" onClick={deleteSelectedNode}><Trash2 size={16} /> Delete</Button>
           <Button variant="secondary" size="sm" onClick={undo}><Undo2 size={16} /> Undo</Button>
           <Button variant="secondary" size="sm" onClick={redo}><Redo2 size={16} /> Redo</Button>
+          <Button variant="secondary" size="sm" onClick={autoLayout} disabled={!activeBrainDumpId}><LayoutGrid size={16} /> Auto Layout</Button>
+          <Button variant="secondary" size="sm" onClick={autoConnect} disabled={!activeBrainDumpId}><GitBranch size={16} /> Auto Connect</Button>
+          <Button variant="secondary" size="sm" onClick={exportCanvas} disabled={!activeBrainDumpId}><Download size={16} /> Export</Button>
           <Button variant="secondary" size="sm" onClick={restoreBrainDump} disabled={!activeBrainDumpId}><RefreshCcw size={16} /> Restore</Button>
           <span className="px-3 py-2 text-xs font-semibold text-text-muted">{loading ? 'Loading...' : saveStatus}</span>
           <div className="flex min-w-44 items-center gap-2 rounded-full border border-border-subtle bg-bg-base px-3 py-2 text-xs font-semibold text-text-secondary">
@@ -526,17 +592,17 @@ export default function Canvas() {
       </main>
 
       {brainDumpOpen && (
-        <Modal title="Brain Dump" onClose={() => setBrainDumpOpen(false)}>
+        <Modal title="What's on your mind?" onClose={() => setBrainDumpOpen(false)}>
           <textarea
             value={brainDumpInput}
             onChange={(event) => setBrainDumpInput(event.target.value)}
-            placeholder="Drop your thoughts here. LifeOS AI will turn them into a structured roadmap."
+            placeholder="Write anything: assignments, exams, React interviews, DSA revision, habits, people, deadlines, projects..."
             className="mt-5 w-full rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm text-text-primary outline-none focus:border-accent-signal focus:ring-2 focus:ring-accent-signal/20"
             rows={8}
           />
           <div className="mt-6 flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setBrainDumpOpen(false)}>Cancel</Button>
-            <Button onClick={() => runBrainDump()} disabled={aiLoading || !hasBrainDumpAccess}>{aiLoading ? 'Creating...' : 'Create roadmap'}</Button>
+            <Button onClick={() => runBrainDump()} disabled={aiLoading || !hasBrainDumpAccess}>{aiLoading ? 'Building...' : 'Build my second brain'}</Button>
           </div>
         </Modal>
       )}

@@ -450,12 +450,22 @@ export function AppDataProvider({ children }) {
     setCache((current) => {
       const brainDumps = [result.brainDump, ...(current.brainDumps || [])]
       const createdGoals = result.created?.goals || []
+      const createdTasks = result.created?.tasks || []
       const goals = current.goals ? [...createdGoals, ...current.goals] : current.goals
+      const plannerWeeks = createdTasks.reduce(
+        (weeks, task) => updateTaskInPlannerWeeks(weeks, task, 'upsert'),
+        current.plannerWeeks,
+      )
+      const dashboardWithTasks = createdTasks.reduce(
+        (dashboard, task) => syncUpcomingTask(adjustTaskStats(dashboard, task, null, 'create'), task),
+        current.dashboard,
+      )
       return {
         ...current,
         brainDumps,
         goals,
-        dashboard: syncGoalDashboard(current.dashboard, goals),
+        plannerWeeks,
+        dashboard: syncGoalDashboard(dashboardWithTasks, goals),
         canvases: {
           ...current.canvases,
           [result.brainDump._id]: result.canvas,

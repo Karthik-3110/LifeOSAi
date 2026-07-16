@@ -7,6 +7,16 @@ import { buildPlannerDays, getPlannerWeekKey, groupTasksByPlannerDay } from '../
 import Button from '../components/ui/Button.jsx'
 import DayColumn from '../components/planner/DayColumn.jsx'
 
+const canCompleteTask = (task) => {
+  const value = task.raw?.date || task.date
+  if (!value) return true
+  const scheduled = new Date(value)
+  scheduled.setHours(0, 0, 0, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return scheduled <= today
+}
+
 function findContainerId(taskMap, itemId) {
   if (taskMap[itemId]) return itemId
   return Object.keys(taskMap).find((dayId) => taskMap[dayId].some((task) => task.id === itemId))
@@ -16,7 +26,15 @@ export default function Planner() {
   const { cache, loading: dataLoading, ensurePlannerWeek, createTask, updateTask, deleteTask: removeTask } = useAppData()
   const [tasksByDay, setTasksByDay] = useState({})
   const [error, setError] = useState('')
-  const [taskBox, setTaskBox] = useState({ open: false, dayId: '', title: '' })
+  const [taskBox, setTaskBox] = useState({
+    open: false,
+    dayId: '',
+    title: '',
+    priority: 'medium',
+    category: 'Study',
+    estimatedTime: 45,
+    recurring: 'none',
+  })
   const [savingTask, setSavingTask] = useState(false)
   const taskInputRef = useRef(null)
   const plannerDays = useMemo(() => buildPlannerDays(), [])
@@ -85,11 +103,11 @@ export default function Planner() {
   }
 
   const openTaskBox = useCallback((dayId = plannerDays[0].id) => {
-    setTaskBox({ open: true, dayId, title: '' })
+    setTaskBox({ open: true, dayId, title: '', priority: 'medium', category: 'Study', estimatedTime: 45, recurring: 'none' })
   }, [plannerDays])
 
   const closeTaskBox = useCallback(() => {
-    setTaskBox({ open: false, dayId: '', title: '' })
+    setTaskBox({ open: false, dayId: '', title: '', priority: 'medium', category: 'Study', estimatedTime: 45, recurring: 'none' })
   }, [])
 
   const submitTask = async (event) => {
@@ -105,8 +123,13 @@ export default function Planner() {
       await createTask({
         title,
         type: 'task',
-        tag: 'Task',
+        priority: taskBox.priority,
+        category: taskBox.category,
+        tag: taskBox.category,
         date: day.dateValue.toISOString(),
+        estimatedTime: Number(taskBox.estimatedTime) || 45,
+        recurring: taskBox.recurring,
+        progress: 0,
       })
       closeTaskBox()
     } catch (currentError) {
@@ -129,6 +152,10 @@ export default function Planner() {
 
   const toggleTask = useCallback(async (task) => {
     try {
+      if (!task.completed && !canCompleteTask(task)) {
+        setError('This task is scheduled for a future date and cannot be completed yet.')
+        return
+      }
       await updateTask(task.raw || task, { completed: !task.completed })
       setTasksByDay((current) => Object.fromEntries(
         Object.entries(current).map(([dayId, tasks]) => [
@@ -181,6 +208,52 @@ export default function Planner() {
                   className="mt-3 w-full rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm text-text-primary outline-none transition placeholder:text-text-muted focus:border-accent-signal focus:ring-2 focus:ring-accent-signal/30"
                   placeholder="Write a task..."
                 />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 md:w-[28rem]">
+                <label className="grid gap-2 text-xs font-semibold text-text-secondary">
+                  Priority
+                  <select
+                    value={taskBox.priority}
+                    onChange={(event) => setTaskBox((current) => ({ ...current, priority: event.target.value }))}
+                    className="rounded-xl border border-border-subtle bg-bg-base px-3 py-3 text-sm text-text-primary outline-none focus:border-accent-signal focus:ring-2 focus:ring-accent-signal/20"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </label>
+                <label className="grid gap-2 text-xs font-semibold text-text-secondary">
+                  Category
+                  <input
+                    value={taskBox.category}
+                    onChange={(event) => setTaskBox((current) => ({ ...current, category: event.target.value }))}
+                    className="rounded-xl border border-border-subtle bg-bg-base px-3 py-3 text-sm text-text-primary outline-none focus:border-accent-signal focus:ring-2 focus:ring-accent-signal/20"
+                  />
+                </label>
+                <label className="grid gap-2 text-xs font-semibold text-text-secondary">
+                  Estimated Time
+                  <input
+                    type="number"
+                    min="0"
+                    max="1440"
+                    value={taskBox.estimatedTime}
+                    onChange={(event) => setTaskBox((current) => ({ ...current, estimatedTime: event.target.value }))}
+                    className="rounded-xl border border-border-subtle bg-bg-base px-3 py-3 text-sm text-text-primary outline-none focus:border-accent-signal focus:ring-2 focus:ring-accent-signal/20"
+                  />
+                </label>
+                <label className="grid gap-2 text-xs font-semibold text-text-secondary">
+                  Recurring
+                  <select
+                    value={taskBox.recurring}
+                    onChange={(event) => setTaskBox((current) => ({ ...current, recurring: event.target.value }))}
+                    className="rounded-xl border border-border-subtle bg-bg-base px-3 py-3 text-sm text-text-primary outline-none focus:border-accent-signal focus:ring-2 focus:ring-accent-signal/20"
+                  >
+                    <option value="none">None</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </label>
               </div>
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={closeTaskBox} disabled={savingTask}>

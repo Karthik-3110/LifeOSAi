@@ -26,6 +26,18 @@ const taskSchema = new Schema(
       enum: ["task", "deadline", "milestone"],
       default: "task",
     },
+    priority: {
+      type: String,
+      enum: ["low", "medium", "high"],
+      default: "medium",
+      index: true,
+    },
+    category: {
+      type: String,
+      trim: true,
+      default: "General",
+      index: true,
+    },
     tag: {
       type: String,
       trim: true,
@@ -41,13 +53,34 @@ const taskSchema = new Schema(
       default: "",
       trim: true,
     },
+    estimatedTime: {
+      type: Number,
+      default: 45,
+      min: 0,
+      max: 1440,
+    },
+    recurring: {
+      type: String,
+      enum: ["none", "daily", "weekly", "monthly"],
+      default: "none",
+    },
+    progress: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
     completed: {
       type: Boolean,
       default: false,
     },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
     source: {
       type: String,
-      enum: ["planner"],
+      enum: ["planner", "brain-dump"],
       default: "planner",
       index: true,
     },
@@ -64,6 +97,7 @@ const taskSchema = new Schema(
 taskSchema.index({ userId: 1, date: 1 });
 taskSchema.index({ userId: 1, completed: 1, date: 1 });
 taskSchema.index({ userId: 1, source: 1, date: 1 });
+taskSchema.index({ userId: 1, category: 1, priority: 1 });
 
 const Task = mongoose.model("Task", taskSchema);
 

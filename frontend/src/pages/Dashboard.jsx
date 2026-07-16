@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import { Brain, CalendarDays, CheckCircle2, Edit3, Map, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Brain, CalendarDays, CheckCircle2, Clock3, Edit3, Map, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
 import { useAppData } from '../context/useAppData.js'
 import Badge from '../components/ui/Badge.jsx'
@@ -31,6 +31,7 @@ export default function Dashboard() {
   } = useAppData()
   const navigate = useNavigate()
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const [coachAnswer, setCoachAnswer] = useState('')
   const [goalModalOpen, setGoalModalOpen] = useState(false)
   const [brainDumpOpen, setBrainDumpOpen] = useState(false)
   const [billingOpen, setBillingOpen] = useState(false)
@@ -118,6 +119,14 @@ export default function Dashboard() {
 
   const toggleTask = async (task) => {
     try {
+      const scheduled = new Date(task.date || task.dueDate)
+      scheduled.setHours(0, 0, 0, 0)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      if (!task.completed && scheduled > today) {
+        setError('This task is scheduled for a future date and cannot be completed yet.')
+        return
+      }
       await updateTask(task, { completed: !task.completed })
     } catch (currentError) {
       setError(currentError.message)
@@ -127,6 +136,12 @@ export default function Dashboard() {
   const stats = dashboard?.stats || {}
   const recentGoals = dashboard?.recentGoals || []
   const upcoming = dashboard?.upcoming || dashboard?.upcomingTasks || []
+  const brief = dashboard?.dailyBrief || {}
+
+  const askGoalCoach = (goal) => {
+    setCoachAnswer(`Study Coach: Focus "${goal.title}" into one clear next block. Start with a 25 minute recall pass, write the confusing parts, then create 5 quiz questions. Priority: ${goal.priority || 'medium'}. Progress target today: ${Math.min((goal.progress || 0) + 10, 100)}%.`)
+    setAssistantOpen(true)
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -153,9 +168,33 @@ export default function Dashboard() {
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Active goals" value={stats.activeGoals ?? 0} delta={`${stats.doneGoals ?? 0} done`} />
         <StatCard label="Tasks completed" value={stats.completedTasks ?? 0} delta={`${stats.openTasks ?? 0} open`} />
-        <StatCard label="Total tasks" value={stats.totalTasks ?? 0} delta="Stored" />
-        <StatCard label="Readiness score" value={stats.completionRate ?? 0} delta="completion rate" />
+        <StatCard label="Brain Dumps" value={stats.brainDumpsCreated ?? 0} delta="knowledge graph" />
+        <StatCard label="Productivity Score" value={stats.productivityScore ?? stats.completionRate ?? 0} delta="AI estimate" />
       </div>
+
+      <Card className="mt-8">
+        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
+          <div>
+            <div className="flex items-center gap-2">
+              <Sparkles className="text-accent-signal" size={20} />
+              <h2 className="font-display text-2xl font-semibold text-text-primary">Daily AI Brief</h2>
+            </div>
+            <p className="mt-2 text-text-secondary">{brief.studyRecommendation || 'Create a Brain Dump to generate your student briefing.'}</p>
+          </div>
+          <div className="rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm font-semibold text-text-secondary">
+            <Clock3 className="mr-2 inline text-accent-signal" size={16} />
+            {Math.round((brief.estimatedWorkloadMinutes || 0) / 60 * 10) / 10}h planned
+          </div>
+        </div>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <BriefList title="Today's Priorities" items={brief.priorities || []} empty="No priority tasks for today." />
+          <BriefList title="Upcoming Deadlines" items={(brief.upcomingDeadlines || []).map((item) => item.title)} empty="No urgent deadlines." />
+          <div className="rounded-xl border border-border-subtle bg-bg-base p-4">
+            <p className="text-sm font-semibold text-text-primary">Productivity Score</p>
+            <p className="mt-4 font-display text-4xl font-bold text-accent-signal">{brief.productivityScore ?? stats.productivityScore ?? 0}%</p>
+          </div>
+        </div>
+      </Card>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
         <Card>
@@ -179,6 +218,7 @@ export default function Dashboard() {
                 <p className="font-mono text-sm font-semibold text-text-secondary">{goal.progress}%</p>
                 <div className="flex gap-2 md:justify-end">
                   <button onClick={() => openEditGoal(goal)} className="rounded-full p-2 text-text-muted hover:bg-bg-surface-hi hover:text-text-primary" aria-label="Edit goal"><Edit3 size={16} /></button>
+                  <button onClick={() => askGoalCoach(goal)} className="rounded-full p-2 text-text-muted hover:bg-bg-surface-hi hover:text-accent-signal" aria-label="Ask AI"><Sparkles size={16} /></button>
                   <button onClick={() => completeGoal(goal)} className="rounded-full p-2 text-text-muted hover:bg-bg-surface-hi hover:text-node-resource" aria-label="Complete goal"><CheckCircle2 size={16} /></button>
                   <button onClick={() => deleteGoal(goal)} className="rounded-full p-2 text-text-muted hover:bg-bg-surface-hi hover:text-node-deadline" aria-label="Delete goal"><Trash2 size={16} /></button>
                 </div>
@@ -220,9 +260,9 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
           <Card className="w-full max-w-md">
             <h2 className="font-display text-2xl font-semibold text-text-primary">LifeOS Assistant</h2>
-            <p className="mt-3 text-text-secondary">Ask me to break a goal into milestones, find conflicts, or score readiness.</p>
+            <p className="mt-3 text-text-secondary">Ask me to explain a topic, create flashcards, generate quiz questions, or break a goal into milestones.</p>
             <div className="mt-6 rounded-xl border border-accent-signal/20 bg-accent-signal/10 p-4 text-sm text-accent-signal">
-              Want me to turn your brain dump into a launch plan?
+              {coachAnswer || 'Want me to turn your Brain Dump into a study plan, flashcards, and a quiz?'}
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setAssistantOpen(false)}>Close</Button>
@@ -272,6 +312,20 @@ function QuickCard({ icon: Icon, title, to }) {
       <p className="mt-5 font-display text-xl font-semibold text-text-primary">{title}</p>
       <p className="mt-2 text-sm text-text-secondary">Jump back into focused work.</p>
     </Link>
+  )
+}
+
+function BriefList({ empty, items, title }) {
+  return (
+    <div className="rounded-xl border border-border-subtle bg-bg-base p-4">
+      <p className="text-sm font-semibold text-text-primary">{title}</p>
+      <div className="mt-4 space-y-2">
+        {items.length === 0 && <p className="text-sm text-text-secondary">{empty}</p>}
+        {items.slice(0, 4).map((item) => (
+          <p key={item} className="rounded-lg bg-bg-surface px-3 py-2 text-sm text-text-secondary">{item}</p>
+        ))}
+      </div>
+    </div>
   )
 }
 
