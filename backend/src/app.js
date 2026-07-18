@@ -8,6 +8,8 @@ import { apiRateLimiter } from "./middleware/rateLimiter.js";
 import routes from "./routes/index.js";
 
 const app = express();
+// Render forwards the original client IP through one trusted proxy.
+app.set("trust proxy", 1);
 const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim())

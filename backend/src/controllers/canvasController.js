@@ -8,7 +8,7 @@ import User from "../models/User.js";
 import ApiError from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import { generateSecondBrainPlan } from "../services/openaiService.js";
+import { generateSecondBrainPlan, getOpenAIModel } from "../services/openaiService.js";
 import { getSecondBrainMemory } from "../services/memoryService.js";
 
 const taskKeywords = /\b(todo|task|need to|must|should|call|email|write|ship|finish|fix|create|build|send|review|schedule)\b/i;
@@ -363,9 +363,30 @@ const analyzeThoughts = (input) => {
 };
 
 const analyzeWithOpenAI = async (input, userId) => {
-  const memory = await getSecondBrainMemory(userId);
-  const roadmap = await generateSecondBrainPlan({ input, memory });
-  return normalizeRoadmap(roadmap, input);
+  try {
+    const memory = await getSecondBrainMemory(userId);
+    const roadmap = await generateSecondBrainPlan({ input, memory });
+    return {
+      extracted: normalizeRoadmap(roadmap, input),
+      ai: {
+        provider: "openai",
+        model: getOpenAIModel(),
+        fallback: false,
+      },
+    };
+  } catch (error) {
+    // The provider error is logged by openaiService without exposing sensitive details.
+    console.warn("[Brain Dump] Using local fallback", { code: error?.code, message: error?.message });
+    return {
+      extracted: normalizeRoadmap(analyzeThoughts(input), input),
+      ai: {
+        provider: "local",
+        model: null,
+        fallback: true,
+        warning: "AI generation was unavailable, so LifeOS created this plan locally.",
+      },
+    };
+  }
 };
 
 const createCanvasArtifacts = ({ goals = [], tasks = [], notes = [], subjects = [], projects = [], habits = [], exams = [], events = [], people = [], dependencies = [], relationships = [] }, existingCount = 0) => {
@@ -695,7 +716,7 @@ export const saveCanvas = asyncHandler(async (req, res) => {
 export const analyzeBrainDump = asyncHandler(async (req, res) => {
   const input = String(req.body.input || "").trim();
   assertBrainDumpCreditAvailable(req.user);
-  const extracted = await analyzeWithOpenAI(input, req.user._id);
+  const { extracted, ai } = await analyzeWithOpenAI(input, req.user._id);
   const creditState = await consumeBrainDumpCredit(req.user);
 
   const createdGoals = await Goal.insertMany(
@@ -787,6 +808,7 @@ export const analyzeBrainDump = asyncHandler(async (req, res) => {
     },
     canvas,
     credits: creditState,
+    ai,
   }, 201);
 });
 

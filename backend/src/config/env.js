@@ -3,7 +3,6 @@ const requiredEnvVars = [
   "FIREBASE_PROJECT_ID",
   "FIREBASE_CLIENT_EMAIL",
   "FIREBASE_PRIVATE_KEY",
-  "OPENAI_API_KEY",
 ];
 
 export const validateEnv = () => {
