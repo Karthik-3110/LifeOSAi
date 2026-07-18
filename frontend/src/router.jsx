@@ -1,5 +1,5 @@
 import { createElement, lazy, Suspense } from 'react'
-import { createBrowserRouter } from 'react-router-dom'
+import { createHashRouter } from 'react-router-dom'
 import AppShell from './components/layout/AppShell.jsx'
 import PageLoader from './components/layout/PageLoader.jsx'
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx'
@@ -17,7 +17,7 @@ function lazyPage(Page) {
   return <Suspense fallback={<PageLoader />}>{createElement(Page)}</Suspense>
 }
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: '/',
     element: lazyPage(homePage),
@@ -41,6 +41,7 @@ export const router = createBrowserRouter([
           { path: '/planner', element: lazyPage(plannerPage) },
           { path: '/analytics', element: lazyPage(analyticsPage) },
           { path: '/assistant', element: lazyPage(canvasPage) },
+          { path: '/profile', element: lazyPage(settingsPage) },
           { path: '/settings', element: lazyPage(settingsPage) },
         ],
       },
