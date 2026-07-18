@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Brain, CalendarDays, CheckCircle2, Clock3, Edit3, Map, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
 import { useAppData } from '../context/useAppData.js'
+import { api } from '../lib/api.js'
 import Badge from '../components/ui/Badge.jsx'
 import Button from '../components/ui/Button.jsx'
 import Card from '../components/ui/Card.jsx'
@@ -138,9 +139,16 @@ export default function Dashboard() {
   const upcoming = dashboard?.upcoming || dashboard?.upcomingTasks || []
   const brief = dashboard?.dailyBrief || {}
 
-  const askGoalCoach = (goal) => {
-    setCoachAnswer(`Study Coach: Focus "${goal.title}" into one clear next block. Start with a 25 minute recall pass, write the confusing parts, then create 5 quiz questions. Priority: ${goal.priority || 'medium'}. Progress target today: ${Math.min((goal.progress || 0) + 10, 100)}%.`)
+  const askGoalCoach = async (goal) => {
     setAssistantOpen(true)
+    setCoachAnswer('Thinking through your next best study block...')
+    try {
+      const result = await api.studyCoach(`Help me make progress on this goal: ${goal.title}. Priority: ${goal.priority || 'medium'}. Current progress: ${goal.progress || 0}%.`)
+      const nextSteps = (result.nextSteps || []).map((step) => `• ${step}`).join('\n')
+      setCoachAnswer([result.answer, nextSteps].filter(Boolean).join('\n\n'))
+    } catch (currentError) {
+      setCoachAnswer(currentError.message)
+    }
   }
 
   return (
@@ -179,7 +187,9 @@ export default function Dashboard() {
               <Sparkles className="text-accent-signal" size={20} />
               <h2 className="font-display text-2xl font-semibold text-text-primary">Daily AI Brief</h2>
             </div>
+            {brief.greeting && <p className="mt-2 text-sm font-medium text-accent-signal">{brief.greeting}</p>}
             <p className="mt-2 text-text-secondary">{brief.studyRecommendation || 'Create a Brain Dump to generate your student briefing.'}</p>
+            {brief.productivityNote && <p className="mt-2 text-sm text-text-muted">{brief.productivityNote}</p>}
           </div>
           <div className="rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm font-semibold text-text-secondary">
             <Clock3 className="mr-2 inline text-accent-signal" size={16} />

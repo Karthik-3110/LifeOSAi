@@ -15,7 +15,7 @@ const pages = {
   blog: ['Blog', 'Product notes, workflow ideas, and LifeOS AI updates will live here.'],
   privacy: ['Privacy', 'Your workspace data is tied to your authenticated account and stored in MongoDB for your LifeOS AI experience.'],
   terms: ['Terms', 'Use LifeOS AI responsibly, keep your account secure, and follow the policies shown in the app as they evolve.'],
-  security: ['Security', 'LifeOS AI uses Firebase authentication and backend-only API keys for protected services such as Groq.'],
+  security: ['Security', 'LifeOS AI uses Firebase authentication and backend-only API keys for protected services such as OpenAI.'],
   status: ['Status', 'Core app status: frontend routes, backend API, MongoDB data, Firebase auth, and Brain Dump AI integrations.'],
 }
 

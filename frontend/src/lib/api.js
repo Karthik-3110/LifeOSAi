@@ -63,6 +63,7 @@ export const api = {
   deleteBrainDump: (id) => apiRequest(`/canvas/brain-dumps/${id}`, { method: 'DELETE' }),
   duplicateBrainDump: (id) => apiRequest(`/canvas/brain-dumps/${id}/duplicate`, { method: 'POST' }),
   restoreBrainDump: (id) => apiRequest(`/canvas/brain-dumps/${id}/restore`, { method: 'POST' }),
+  studyCoach: (prompt) => apiRequest('/ai/study-coach', { method: 'POST', body: JSON.stringify({ prompt }) }),
   billing: () => apiRequest('/billing'),
   createBillingOrder: (planId) => apiRequest('/billing/orders', { method: 'POST', body: JSON.stringify({ planId }) }),
   verifyBillingPayment: (body) => apiRequest('/billing/verify', { method: 'POST', body: JSON.stringify(body) }),

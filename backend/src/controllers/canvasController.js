@@ -8,6 +8,8 @@ import User from "../models/User.js";
 import ApiError from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { generateSecondBrainPlan } from "../services/openaiService.js";
+import { getSecondBrainMemory } from "../services/memoryService.js";
 
 const taskKeywords = /\b(todo|task|need to|must|should|call|email|write|ship|finish|fix|create|build|send|review|schedule)\b/i;
 const goalKeywords = /\b(goal|want to|aim|objective|launch|become|learn|grow|improve|complete)\b/i;
@@ -360,44 +362,10 @@ const analyzeThoughts = (input) => {
   };
 };
 
-const analyzeWithGroq = async (input) => {
-  if (!process.env.GROQ_API_KEY) {
-    return normalizeRoadmap(analyzeThoughts(input), input);
-  }
-
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.GROQ_MODEL || "llama-3.1-8b-instant",
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: "Turn messy student thoughts into compact JSON for a second-brain app. Include keys title, goals, tasks, notes, subjects, projects, habits, exams, events, people, dependencies, timeline, studyPlan, weeklyPlan, upcomingEvents, relationships, categories. Goals need title, description, priority low|medium|high, category, dueDate. Tasks need title, type task|deadline|milestone, category, priority, dueDate, estimatedTime minutes, recurring none|daily|weekly|monthly. Use ISO dates or null.",
-        },
-        { role: "user", content: input },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new ApiError(502, "Groq roadmap generation failed", "GROQ_REQUEST_FAILED", text.slice(0, 500));
-  }
-
-  const payload = await response.json();
-  const content = payload?.choices?.[0]?.message?.content;
-
-  try {
-    return normalizeRoadmap(JSON.parse(content), input);
-  } catch {
-    throw new ApiError(502, "Groq returned invalid roadmap JSON", "GROQ_INVALID_JSON");
-  }
+const analyzeWithOpenAI = async (input, userId) => {
+  const memory = await getSecondBrainMemory(userId);
+  const roadmap = await generateSecondBrainPlan({ input, memory });
+  return normalizeRoadmap(roadmap, input);
 };
 
 const createCanvasArtifacts = ({ goals = [], tasks = [], notes = [], subjects = [], projects = [], habits = [], exams = [], events = [], people = [], dependencies = [], relationships = [] }, existingCount = 0) => {
@@ -727,7 +695,7 @@ export const saveCanvas = asyncHandler(async (req, res) => {
 export const analyzeBrainDump = asyncHandler(async (req, res) => {
   const input = String(req.body.input || "").trim();
   assertBrainDumpCreditAvailable(req.user);
-  const extracted = await analyzeWithGroq(input);
+  const extracted = await analyzeWithOpenAI(input, req.user._id);
   const creditState = await consumeBrainDumpCredit(req.user);
 
   const createdGoals = await Goal.insertMany(

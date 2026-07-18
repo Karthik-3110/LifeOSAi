@@ -7,6 +7,7 @@ import billingRoutes from "./billingRoutes.js";
 import goalRoutes from "./goalRoutes.js";
 import taskRoutes from "./taskRoutes.js";
 import userRoutes from "./userRoutes.js";
+import aiRoutes from "./aiRoutes.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
@@ -32,5 +33,6 @@ router.use("/canvas", canvasRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/billing", billingRoutes);
+router.use("/ai", aiRoutes);
 
 export default router;

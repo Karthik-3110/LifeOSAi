@@ -1,6 +1,9 @@
 import Goal from "../models/Goal.js";
 import BrainDump from "../models/BrainDump.js";
 import Task from "../models/Task.js";
+import AIHistory from "../models/AIHistory.js";
+import { getSecondBrainMemory } from "../services/memoryService.js";
+import { generateDailyBrief } from "../services/openaiService.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
@@ -128,6 +131,43 @@ export const getDashboard = asyncHandler(async (req, res) => {
   const soonestDeadline = upcoming.find((item) => item.type === "deadline" || item.itemType === "goal");
   const topFocus = todaysTasks[0]?.category || recentGoals[0]?.category || "your highest priority subject";
 
+  const fallbackBrief = {
+    priorities: todaysTasks.map((task) => task.title).slice(0, 4),
+    estimatedWorkloadMinutes: estimatedWorkload,
+    upcomingDeadlines: upcoming.slice(0, 4),
+    studyRecommendation: `Focus on ${topFocus} today${soonestDeadline ? ` because "${soonestDeadline.title}" is coming up.` : "."}`,
+    productivityScore: Math.min(100, Math.round((completionRate * 0.7) + ((goalsByStatus.done || 0) * 6) + Math.min(brainDumpCount, 10))),
+  };
+
+  let dailyBrief = fallbackBrief;
+  try {
+    const memory = await getSecondBrainMemory(req.user._id);
+    const generatedBrief = await generateDailyBrief({
+      memory,
+      todaySummary: {
+        priorities: fallbackBrief.priorities,
+        upcomingDeadlines: fallbackBrief.upcomingDeadlines.map((item) => ({ title: item.title, date: item.date || item.dueDate })),
+        estimatedWorkloadMinutes: estimatedWorkload,
+        productivityScore: fallbackBrief.productivityScore,
+      },
+    });
+    dailyBrief = {
+      ...fallbackBrief,
+      greeting: generatedBrief.greeting || "",
+      studyRecommendation: generatedBrief.studyRecommendation || fallbackBrief.studyRecommendation,
+      suggestions: Array.isArray(generatedBrief.suggestions) ? generatedBrief.suggestions.slice(0, 3) : [],
+      productivityNote: generatedBrief.productivityNote || "",
+    };
+    await AIHistory.create({
+      userId: req.user._id,
+      action: "daily-brief",
+      input: "Generate daily brief",
+      output: dailyBrief,
+    });
+  } catch (error) {
+    // The deterministic brief keeps the dashboard usable if the AI provider is temporarily unavailable.
+  }
+
   apiResponse(res, {
     stats: {
       totalGoals,
@@ -142,13 +182,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
       productivityScore: Math.min(100, Math.round((completionRate * 0.7) + ((goalsByStatus.done || 0) * 6) + Math.min(brainDumpCount, 10))),
       estimatedWorkload,
     },
-    dailyBrief: {
-      priorities: todaysTasks.map((task) => task.title).slice(0, 4),
-      estimatedWorkloadMinutes: estimatedWorkload,
-      upcomingDeadlines: upcoming.slice(0, 4),
-      studyRecommendation: `Focus on ${topFocus} today${soonestDeadline ? ` because "${soonestDeadline.title}" is coming up.` : "."}`,
-      productivityScore: Math.min(100, Math.round((completionRate * 0.7) + ((goalsByStatus.done || 0) * 6) + Math.min(brainDumpCount, 10))),
-    },
+    dailyBrief,
     recentGoals,
     upcomingTasks,
     upcomingGoals,
