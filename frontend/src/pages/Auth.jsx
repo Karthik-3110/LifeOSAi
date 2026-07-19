@@ -54,7 +54,7 @@ export default function Auth() {
         </div>
         <blockquote className="max-w-xl">
           <p className="font-display text-4xl font-semibold leading-tight text-text-primary">"It&apos;s the first AI product that doesn&apos;t feel like a chatbot. It feels like a co-founder."</p>
-          <footer className="mt-6 text-text-secondary">Priya N. - Solo builder</footer>
+          <footer className="mt-6 text-text-secondary">Karthik - Solo builder</footer>
         </blockquote>
         <div className="absolute bottom-16 right-16 h-44 w-44 rounded-full border border-accent-signal/20" />
       </section>
