@@ -80,7 +80,7 @@ const taskSchema = new Schema(
     },
     source: {
       type: String,
-      enum: ["planner", "brain-dump"],
+      enum: ["planner", "brain-dump", "semester-copilot"],
       default: "planner",
       index: true,
     },

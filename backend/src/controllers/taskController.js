@@ -8,7 +8,7 @@ import { buildCursorFilter, getNextCursor, parseLimit, trimPage } from "../utils
 const taskProjection = "goalId title type priority category tag date time estimatedTime recurring progress completed completedAt source createdAt";
 const plannerTaskFilter = {
   $or: [
-    { source: { $in: ["planner", "brain-dump"] } },
+    { source: { $in: ["planner", "brain-dump", "semester-copilot"] } },
     { source: { $exists: false }, tag: { $in: ["", "Task"] } },
   ],
 };

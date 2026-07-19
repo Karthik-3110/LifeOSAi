@@ -1,6 +1,7 @@
 import Goal from "../models/Goal.js";
 import BrainDump from "../models/BrainDump.js";
 import Task from "../models/Task.js";
+import Semester from "../models/Semester.js";
 import AIHistory from "../models/AIHistory.js";
 import { getSecondBrainMemory } from "../services/memoryService.js";
 import { generateDailyBrief } from "../services/openaiService.js";
@@ -21,7 +22,7 @@ const addDays = (date, days) => {
 
 const plannerTaskFilter = {
   $or: [
-    { source: { $in: ["planner", "brain-dump"] } },
+    { source: { $in: ["planner", "brain-dump", "semester-copilot"] } },
     { source: { $exists: false }, tag: { $in: ["", "Task"] } },
   ],
 };
@@ -38,6 +39,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
     upcomingGoals,
     brainDumpCount,
     todaysTasks,
+    activeSemester,
   ] = await Promise.all([
     Goal.aggregate([
       { $match: { userId: req.user._id } },
@@ -72,6 +74,10 @@ export const getDashboard = asyncHandler(async (req, res) => {
       .select("goalId title type priority category tag date time estimatedTime recurring progress completed source createdAt")
       .sort({ date: 1, _id: -1 })
       .limit(10)
+      .lean(),
+    Semester.findOne({ userId: req.user._id, status: "active" })
+      .select("name subjects assignments projects exams")
+      .sort({ updatedAt: -1 })
       .lean(),
     Goal.find({
       userId: req.user._id,
@@ -187,5 +193,16 @@ export const getDashboard = asyncHandler(async (req, res) => {
     upcomingTasks,
     upcomingGoals,
     upcoming,
+    semester: activeSemester ? {
+      _id: activeSemester._id,
+      name: activeSemester.name,
+      subjectCount: activeSemester.subjects?.length || 0,
+      upcomingExamCount: activeSemester.exams?.filter((item) => item.date && new Date(item.date) >= today).length || 0,
+      assignmentCount: activeSemester.assignments?.length || 0,
+      completion: (() => {
+        const items = [...(activeSemester.assignments || []), ...(activeSemester.projects || [])];
+        return items.length ? Math.round(items.reduce((sum, item) => sum + (Number(item.progress) || 0), 0) / items.length) : 0;
+      })(),
+    } : null,
   });
 });

@@ -30,7 +30,9 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json({ limit: "3mb" }));
+// Semester source files are encoded client-side for the authenticated analysis API.
+// Individual files are capped and validated again by the controller.
+app.use(express.json({ limit: "170mb" }));
 
 if (process.env.NODE_ENV !== "production") {
   app.use(morgan("dev"));

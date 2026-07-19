@@ -19,7 +19,7 @@ const addDays = (date, days) => {
 
 const plannerTaskFilter = {
   $or: [
-    { source: { $in: ["planner", "brain-dump"] } },
+    { source: { $in: ["planner", "brain-dump", "semester-copilot"] } },
     { source: { $exists: false }, tag: { $in: ["", "Task"] } },
   ],
 };
