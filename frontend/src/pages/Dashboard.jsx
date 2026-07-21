@@ -10,6 +10,7 @@ import Card from '../components/ui/Card.jsx'
 import ProgressBar from '../components/ui/ProgressBar.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
 import BillingPanel from '../components/settings/BillingPanel.jsx'
+import { asArray, asNumber, asRecord, asText, displayDate } from '../lib/safe.js'
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -41,7 +42,7 @@ export default function Dashboard() {
   const [brainDumpLoading, setBrainDumpLoading] = useState(false)
   const [error, setError] = useState('')
   const greeting = useMemo(() => getGreeting(), [])
-  const dashboard = cache.dashboard
+  const dashboard = cache.dashboard && typeof cache.dashboard === 'object' && !Array.isArray(cache.dashboard) ? cache.dashboard : null
   const loading = !dashboard && (dataLoading.dashboard || dataLoading[`bootstrap:${user?._id}`])
   const hasBrainDumpAccess = (user?.brainDumpCredits ?? 0) > 0
     || (user?.unlimitedBrainDumpsUntil && new Date(user.unlimitedBrainDumpsUntil) > new Date())
@@ -134,19 +135,22 @@ export default function Dashboard() {
     }
   }
 
-  const stats = dashboard?.stats || {}
-  const recentGoals = dashboard?.recentGoals || []
-  const upcoming = dashboard?.upcoming || dashboard?.upcomingTasks || []
-  const brief = dashboard?.dailyBrief || {}
-  const semester = dashboard?.semester
+  const stats = asRecord(dashboard?.stats)
+  const recentGoals = asArray(dashboard?.recentGoals).filter((item) => item && typeof item === 'object')
+  const upcoming = asArray(dashboard?.upcoming || dashboard?.upcomingTasks).filter((item) => item && typeof item === 'object')
+  const brief = asRecord(dashboard?.dailyBrief)
+  const semester = asRecord(dashboard?.semester)
+  const nextExam = asRecord(semester.nextExam)
+  const nextAssignment = asRecord(semester.nextAssignment)
 
   const askGoalCoach = async (goal) => {
     setAssistantOpen(true)
     setCoachAnswer('Thinking through your next best study block...')
     try {
-      const result = await api.studyCoach(`Help me make progress on this goal: ${goal.title}. Priority: ${goal.priority || 'medium'}. Current progress: ${goal.progress || 0}%.`)
-      const nextSteps = (result.nextSteps || []).map((step) => `• ${step}`).join('\n')
-      setCoachAnswer([result.answer, nextSteps].filter(Boolean).join('\n\n'))
+      const safeGoal = asRecord(goal)
+      const result = asRecord(await api.studyCoach(`Help me make progress on this goal: ${asText(safeGoal.title, 'this goal')}. Priority: ${asText(safeGoal.priority, 'medium')}. Current progress: ${asNumber(safeGoal.progress)}%.`))
+      const nextSteps = asArray(result.nextSteps).map((step) => asText(step)).filter(Boolean).map((step) => `• ${step}`).join('\n')
+      setCoachAnswer([asText(result.answer), nextSteps].filter(Boolean).join('\n\n'))
     } catch (currentError) {
       setCoachAnswer(currentError.message)
     }
@@ -182,10 +186,10 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Current semester" value={semester?.name || 'Not set'} delta={semester ? `${semester.subjectCount || 0} subjects` : 'Set up your semester'} />
-        <StatCard label="Next exam" value={semester?.nextExam?.title || 'None scheduled'} delta={semester?.nextExam ? `${semester.nextExam.daysRemaining} days remaining` : 'Add an exam date'} />
-        <StatCard label="Upcoming assignment" value={semester?.nextAssignment?.title || 'Nothing due'} delta={semester?.nextAssignment?.date ? new Date(semester.nextAssignment.date).toLocaleDateString() : 'You are clear'} />
-        <StatCard label="Revision progress" value={`${semester?.revisionProgress ?? 0}%`} delta={`${stats.currentStudyStreak ?? 0} day study streak`} />
+        <StatCard label="Current semester" value={asText(semester.name, 'Not set')} delta={semester.name ? `${asNumber(semester.subjectCount)} subjects` : 'Set up your semester'} />
+        <StatCard label="Next exam" value={asText(nextExam.title, 'None scheduled')} delta={nextExam.title ? `${asNumber(nextExam.daysRemaining)} days remaining` : 'Add an exam date'} />
+        <StatCard label="Upcoming assignment" value={asText(nextAssignment.title, 'Nothing due')} delta={nextAssignment.date ? displayDate(nextAssignment.date, 'You are clear') : 'You are clear'} />
+        <StatCard label="Revision progress" value={`${asNumber(semester.revisionProgress)}%`} delta={`${asNumber(stats.currentStudyStreak)} day study streak`} />
       </div>
 
       <Card className="mt-8">
@@ -195,21 +199,21 @@ export default function Dashboard() {
               <Sparkles className="text-accent-signal" size={20} />
               <h2 className="font-display text-2xl font-semibold text-text-primary">Daily AI Brief</h2>
             </div>
-            {brief.greeting && <p className="mt-2 text-sm font-medium text-accent-signal">{brief.greeting}</p>}
-            <p className="mt-2 text-text-secondary">{brief.studyRecommendation || 'Create a Brain Dump to generate your student briefing.'}</p>
-            {brief.productivityNote && <p className="mt-2 text-sm text-text-muted">{brief.productivityNote}</p>}
+            {asText(brief.greeting) && <p className="mt-2 text-sm font-medium text-accent-signal">{asText(brief.greeting)}</p>}
+            <p className="mt-2 text-text-secondary">{asText(brief.studyRecommendation, 'Create a Brain Dump to generate your student briefing.')}</p>
+            {asText(brief.productivityNote) && <p className="mt-2 text-sm text-text-muted">{asText(brief.productivityNote)}</p>}
           </div>
           <div className="rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm font-semibold text-text-secondary">
             <Clock3 className="mr-2 inline text-accent-signal" size={16} />
-            {Math.round((brief.estimatedWorkloadMinutes || 0) / 60 * 10) / 10}h planned
+            {Math.round(asNumber(brief.estimatedWorkloadMinutes) / 60 * 10) / 10}h planned
           </div>
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <BriefList title="Today's Priorities" items={brief.priorities || []} empty="No priority tasks for today." />
-          <BriefList title="Upcoming Deadlines" items={(brief.upcomingDeadlines || []).map((item) => item.title)} empty="No urgent deadlines." />
+          <BriefList title="Today's Priorities" items={asArray(brief.priorities)} empty="No priority tasks for today." />
+          <BriefList title="Upcoming Deadlines" items={asArray(brief.upcomingDeadlines).map((item) => asText(asRecord(item).title))} empty="No urgent deadlines." />
           <div className="rounded-xl border border-border-subtle bg-bg-base p-4">
             <p className="text-sm font-semibold text-text-primary">Productivity Score</p>
-            <p className="mt-4 font-display text-4xl font-bold text-accent-signal">{brief.productivityScore ?? stats.productivityScore ?? 0}%</p>
+            <p className="mt-4 font-display text-4xl font-bold text-accent-signal">{asNumber(brief.productivityScore, asNumber(stats.productivityScore))}%</p>
           </div>
         </div>
       </Card>
@@ -226,14 +230,14 @@ export default function Dashboard() {
               <div key={goal._id} className="grid gap-4 py-5 md:grid-cols-[1fr_180px_70px_180px] md:items-center">
                 <div>
                   <div className="flex items-center gap-3">
-                    <Badge color="goal">{goal.dueDate ? new Date(goal.dueDate).toLocaleDateString() : goal.status}</Badge>
-                    <p className="font-semibold text-text-primary">{goal.title}</p>
+                    <Badge color="goal">{goal.dueDate ? displayDate(goal.dueDate) : asText(goal.status, 'Active')}</Badge>
+                    <p className="font-semibold text-text-primary">{asText(goal.title, 'Untitled goal')}</p>
                   </div>
-                  <p className="mt-2 text-sm text-text-muted">{goal.category || 'Personal'} · {goal.priority || 'medium'}</p>
-                  <div className="mt-4 md:hidden"><ProgressBar value={goal.progress} /></div>
+                  <p className="mt-2 text-sm text-text-muted">{asText(goal.category, 'Personal')} · {asText(goal.priority, 'medium')}</p>
+                  <div className="mt-4 md:hidden"><ProgressBar value={asNumber(goal.progress)} /></div>
                 </div>
-                <div className="hidden md:block"><ProgressBar value={goal.progress} /></div>
-                <p className="font-mono text-sm font-semibold text-text-secondary">{goal.progress}%</p>
+                <div className="hidden md:block"><ProgressBar value={asNumber(goal.progress)} /></div>
+                <p className="font-mono text-sm font-semibold text-text-secondary">{asNumber(goal.progress)}%</p>
                 <div className="flex gap-2 md:justify-end">
                   <button onClick={() => openEditGoal(goal)} className="rounded-full p-2 text-text-muted hover:bg-bg-surface-hi hover:text-text-primary" aria-label="Edit goal"><Edit3 size={16} /></button>
                   <button onClick={() => askGoalCoach(goal)} className="rounded-full p-2 text-text-muted hover:bg-bg-surface-hi hover:text-accent-signal" aria-label="Ask AI"><Sparkles size={16} /></button>
@@ -256,8 +260,8 @@ export default function Dashboard() {
                 ) : (
                   <input type="checkbox" checked={item.completed} onChange={() => toggleTask(item)} className="h-4 w-4 accent-accent-signal" />
                 )}
-                <span className="min-w-0 flex-1">{item.title}</span>
-                <span className="font-mono text-xs text-text-muted">{new Date(item.date || item.dueDate).toLocaleDateString()}</span>
+                <span className="min-w-0 flex-1">{asText(item.title, 'Untitled item')}</span>
+                <span className="font-mono text-xs text-text-muted">{displayDate(item.date || item.dueDate)}</span>
               </label>
             ))}
           </div>
@@ -334,13 +338,14 @@ function QuickCard({ icon: Icon, title, to }) {
 }
 
 function BriefList({ empty, items, title }) {
+  const safeItems = asArray(items).map((item) => asText(item)).filter(Boolean)
   return (
     <div className="rounded-xl border border-border-subtle bg-bg-base p-4">
       <p className="text-sm font-semibold text-text-primary">{title}</p>
       <div className="mt-4 space-y-2">
-        {items.length === 0 && <p className="text-sm text-text-secondary">{empty}</p>}
-        {items.slice(0, 4).map((item) => (
-          <p key={item} className="rounded-lg bg-bg-surface px-3 py-2 text-sm text-text-secondary">{item}</p>
+        {safeItems.length === 0 && <p className="text-sm text-text-secondary">{asText(empty)}</p>}
+        {safeItems.slice(0, 4).map((item, index) => (
+          <p key={`${item}-${index}`} className="rounded-lg bg-bg-surface px-3 py-2 text-sm text-text-secondary">{item}</p>
         ))}
       </div>
     </div>
