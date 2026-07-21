@@ -13,6 +13,10 @@ const emptyCache = {
   canvases: {},
   analytics: null,
   billing: null,
+  semesters: null,
+  notifications: { items: [], unreadCount: 0 },
+  profile: null,
+  settings: null,
   bootstrapped: false,
 }
 
@@ -238,6 +242,72 @@ export function AppDataProvider({ children }) {
       return billing
     })
   }, [cache.billing, runOnce])
+
+  const ensureSemesters = useCallback((force = false) => {
+    if (!force && cache.semesters) return Promise.resolve(cache.semesters)
+    return runOnce('semesters', async () => {
+      const data = await api.listSemesters()
+      const semesters = Array.isArray(data.items) ? data.items : []
+      setCache((current) => ({ ...current, semesters }))
+      return semesters
+    })
+  }, [cache.semesters, runOnce])
+
+  const ensureNotifications = useCallback((force = false) => {
+    if (!force && cache.notifications) return Promise.resolve(cache.notifications)
+    return runOnce('notifications', async () => {
+      const notifications = await api.listNotifications()
+      setCache((current) => ({ ...current, notifications: { items: Array.isArray(notifications.items) ? notifications.items : [], unreadCount: Number(notifications.unreadCount) || 0 } }))
+      return notifications
+    })
+  }, [cache.notifications, runOnce])
+
+  const createSemester = useCallback(async (payload) => {
+    const result = await api.generateSemester(payload)
+    setCache((current) => ({
+      ...current,
+      semesters: [result.semester, ...(current.semesters || []).filter((item) => item._id !== result.semester._id)],
+      goals: current.goals ? [...(result.created?.goals || []), ...current.goals] : current.goals,
+      plannerWeeks: (result.created?.tasks || []).reduce((weeks, task) => updateTaskInPlannerWeeks(weeks, task, 'upsert'), current.plannerWeeks),
+      notifications: result.notification ? { items: [result.notification, ...(current.notifications?.items || [])], unreadCount: (current.notifications?.unreadCount || 0) + (result.notification.read ? 0 : 1) } : current.notifications,
+      analytics: null,
+      dashboard: null,
+    }))
+    return result
+  }, [])
+
+  const updateSemesterItem = useCallback(async (semesterId, type, itemId, payload) => {
+    const updated = await api.updateSemesterItem(semesterId, type, itemId, payload)
+    setCache((current) => ({ ...current, semesters: current.semesters?.map((item) => item._id === semesterId ? updated : item) || current.semesters, dashboard: null }))
+    return updated
+  }, [])
+
+  const addSemesterItem = useCallback(async (semesterId, type, payload) => {
+    const updated = await api.addSemesterItem(semesterId, type, payload)
+    setCache((current) => ({ ...current, semesters: current.semesters?.map((item) => item._id === semesterId ? updated : item) || current.semesters, dashboard: null }))
+    return updated
+  }, [])
+
+  const deleteSemesterItem = useCallback(async (semesterId, type, itemId) => {
+    const updated = await api.deleteSemesterItem(semesterId, type, itemId)
+    setCache((current) => ({ ...current, semesters: current.semesters?.map((item) => item._id === semesterId ? updated : item) || current.semesters, dashboard: null }))
+    return updated
+  }, [])
+
+  const markNotificationRead = useCallback(async (id) => {
+    await api.markNotificationRead(id)
+    setCache((current) => ({ ...current, notifications: { ...current.notifications, items: (current.notifications?.items || []).map((item) => item._id === id ? { ...item, read: true } : item), unreadCount: Math.max(0, (current.notifications?.unreadCount || 0) - (current.notifications?.items || []).some((item) => item._id === id && !item.read)) } }))
+  }, [])
+
+  const markAllNotificationsRead = useCallback(async () => {
+    await api.markAllNotificationsRead()
+    setCache((current) => ({ ...current, notifications: { ...current.notifications, items: (current.notifications?.items || []).map((item) => ({ ...item, read: true })), unreadCount: 0 } }))
+  }, [])
+
+  const clearNotifications = useCallback(async () => {
+    await api.clearNotifications()
+    setCache((current) => ({ ...current, notifications: { items: [], unreadCount: 0 } }))
+  }, [])
 
   const createGoal = useCallback(async (payload) => {
     const tempId = `temp-goal-${Date.now()}`
@@ -545,14 +615,22 @@ export function AppDataProvider({ children }) {
     setCache({ ...emptyCache, userId: user._id })
 
     runOnce(`bootstrap:${user._id}`, async () => {
-      const [dashboard, goalsData, plannerData, brainDumpData] = await Promise.all([
+      const [dashboard, goalsData, plannerData, brainDumpData, analytics, billing, semesterData, notificationData] = await Promise.all([
         api.dashboard(),
         api.listGoals('?limit=50'),
         api.listTasks(`?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}&limit=200`),
         api.listBrainDumps(),
+        api.analytics(),
+        api.billing(),
+        api.listSemesters(),
+        api.listNotifications(),
       ])
 
       const goals = goalsData.items || []
+      const brainDumps = Array.isArray(brainDumpData.items) ? brainDumpData.items : []
+      const canvases = Object.fromEntries((await Promise.all(brainDumps.map(async (brainDump) => {
+        try { return [brainDump._id, await api.getCanvasByBrainDump(brainDump._id)] } catch { return [brainDump._id, { brainDump, nodes: [], edges: [] }] }
+      }))))
       setCache((current) => ({
         ...current,
         userId: user._id,
@@ -562,7 +640,14 @@ export function AppDataProvider({ children }) {
           ...current.plannerWeeks,
           [weekKey]: { items: plannerData.items || [], range, loadedAt: Date.now() },
         },
-        brainDumps: brainDumpData.items || [],
+        brainDumps,
+        canvases,
+        analytics,
+        billing,
+        semesters: Array.isArray(semesterData.items) ? semesterData.items : [],
+        notifications: { items: Array.isArray(notificationData.items) ? notificationData.items : [], unreadCount: Number(notificationData.unreadCount) || 0 },
+        profile: user,
+        settings: user.settings || {},
         bootstrapped: true,
       }))
     }).catch(() => undefined)
@@ -572,7 +657,9 @@ export function AppDataProvider({ children }) {
     import('../pages/Canvas.jsx')
     import('../pages/Analytics.jsx')
     import('../pages/Settings.jsx')
-  }, [cache.bootstrapped, cache.userId, runOnce, user?._id])
+    import('../pages/SemesterCopilot.jsx')
+    import('../pages/StudyTimetable.jsx')
+  }, [cache.bootstrapped, cache.userId, runOnce, user])
 
   const value = useMemo(() => ({
     cache,
@@ -585,7 +672,16 @@ export function AppDataProvider({ children }) {
     ensureCanvas,
     ensureAnalytics,
     ensureBilling,
+    ensureSemesters,
+    ensureNotifications,
     refreshBilling,
+    createSemester,
+    addSemesterItem,
+    updateSemesterItem,
+    deleteSemesterItem,
+    markNotificationRead,
+    markAllNotificationsRead,
+    clearNotifications,
     createGoal,
     updateGoal,
     deleteGoal,
@@ -602,14 +698,18 @@ export function AppDataProvider({ children }) {
   }), [
     cache,
     createBrainDump,
+    createSemester,
     createGoal,
     createTask,
     deleteBrainDump,
     deleteGoal,
     deleteTask,
+    deleteSemesterItem,
     duplicateBrainDump,
     ensureAnalytics,
     ensureBilling,
+    ensureNotifications,
+    ensureSemesters,
     ensureBrainDumps,
     ensureCanvas,
     ensureDashboard,
@@ -617,13 +717,18 @@ export function AppDataProvider({ children }) {
     ensurePlannerWeek,
     errors,
     loading,
+    markAllNotificationsRead,
+    markNotificationRead,
     refreshBilling,
     renameBrainDump,
     restoreBrainDump,
     saveCanvas,
     setCanvasDraft,
     updateGoal,
+    updateSemesterItem,
     updateTask,
+    addSemesterItem,
+    clearNotifications,
   ])
 
   return (

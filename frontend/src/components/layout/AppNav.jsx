@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { BarChart3, CalendarDays, GraduationCap, LayoutDashboard, Map, Settings } from 'lucide-react'
+import { BarChart3, CalendarDays, GraduationCap, LayoutDashboard, Map, Settings, Table2 } from 'lucide-react'
 import Logo from '../ui/Logo.jsx'
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { to: '/planner', label: 'Planner', icon: CalendarDays },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/semester-copilot', label: 'Semester Copilot', icon: GraduationCap },
+  { to: '/study-timetable', label: 'Study Timetable', icon: Table2 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -17,7 +18,7 @@ export default function AppNav() {
       <div className="hidden px-4 py-5 lg:block">
         <Logo />
       </div>
-      <div className="grid grid-cols-5 gap-1 lg:mt-4 lg:flex lg:flex-col lg:px-3">
+      <div className="grid grid-cols-6 gap-1 lg:mt-4 lg:flex lg:flex-col lg:px-3">
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}

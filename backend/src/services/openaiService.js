@@ -1,4 +1,4 @@
-import OpenAI, { toFile } from "openai";
+import OpenAI from "openai";
 import ApiError from "../utils/apiError.js";
 
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -180,47 +180,3 @@ export const generateDailyBrief = ({ memory, todaySummary }) => generateStructur
   schemaHint: "Include greeting (string), priorities (array of up to 4 task titles), studyRecommendation (string), suggestions (array of up to 3 strings), and productivityNote (string).",
   prompt: `Student memory:\n${JSON.stringify(memory)}\n\nToday's planner summary:\n${JSON.stringify(todaySummary)}`,
 });
-
-const semesterSchemaHint = `Return an object with semesterName, subjects, assignments, projects, exams, calendar, studyPlan, revisionPlan, plannerTasks, goals, upcomingEvents, and knowledgeGraph. Each subject needs name, credits, faculty, lectureDays, lectureTime, topics, difficulty, and priority. Dates must be ISO 8601 strings or null. Planner tasks need title, date, category, priority (low|medium|high), type (task|deadline|milestone), estimatedTime, and relatedSubject. Assignments/projects/exams need title, subject, dueDate or date, and priority. knowledgeGraph needs nodes ({id,label,type,meta}) and edges ({source,target,label}).`;
-
-export const generateSemesterPlan = async ({ manualEntry, documents = [], memory }) => {
-  const openai = getClient();
-  const selectedModel = getModel();
-  const uploadedFileIds = [];
-
-  try {
-    await verifyModel(openai, selectedModel);
-    const input = [{
-      role: "user",
-      content: [{
-        type: "input_text",
-        text: `Student's existing LifeOS context:\n${JSON.stringify(memory)}\n\nManual semester entry:\n${JSON.stringify(manualEntry)}\n\nAnalyze the attached academic documents when present. Build a balanced, realistic semester plan. Increase revision as exams approach; prioritize hard subjects and near project deadlines. Do not invent dates when the source provides none.`,
-      }],
-    }];
-
-    for (const document of documents) {
-      const bytes = Buffer.from(document.base64, "base64");
-      const file = await toFile(bytes, document.name, { type: document.type });
-      const uploaded = await openai.files.create({ file, purpose: "user_data" });
-      uploadedFileIds.push(uploaded.id);
-      input[0].content.push({ type: "input_file", file_id: uploaded.id });
-    }
-
-    const response = await openai.responses.create({
-      model: selectedModel,
-      instructions: `You are LifeOS AI Semester Copilot. Extract academic information carefully and turn it into one actionable semester operating plan. ${semesterSchemaHint} Return JSON only.`,
-      input,
-      text: responseFormat("semester_copilot_plan"),
-      store: false,
-    });
-
-    if (response.status !== "completed") {
-      throw new ApiError(503, "AI did not complete the semester analysis.", "OPENAI_INCOMPLETE_RESPONSE");
-    }
-    return parseJsonObject(response.output_text);
-  } catch (error) {
-    throw toProviderError(error, "semester analysis");
-  } finally {
-    await Promise.allSettled(uploadedFileIds.map((id) => openai.files.delete(id)));
-  }
-};

@@ -13,6 +13,7 @@ const analyticsPage = lazy(() => import('./pages/Analytics.jsx'))
 const settingsPage = lazy(() => import('./pages/Settings.jsx'))
 const infoPage = lazy(() => import('./pages/InfoPage.jsx'))
 const semesterCopilotPage = lazy(() => import('./pages/SemesterCopilot.jsx'))
+const studyTimetablePage = lazy(() => import('./pages/StudyTimetable.jsx'))
 
 function lazyPage(Page) {
   return <Suspense fallback={<PageLoader />}>{createElement(Page)}</Suspense>
@@ -42,6 +43,7 @@ export const router = createHashRouter([
           { path: '/planner', element: lazyPage(plannerPage) },
           { path: '/analytics', element: lazyPage(analyticsPage) },
           { path: '/semester-copilot', element: lazyPage(semesterCopilotPage) },
+          { path: '/study-timetable', element: lazyPage(studyTimetablePage) },
           { path: '/assistant', element: lazyPage(canvasPage) },
           { path: '/profile', element: lazyPage(settingsPage) },
           { path: '/settings', element: lazyPage(settingsPage) },

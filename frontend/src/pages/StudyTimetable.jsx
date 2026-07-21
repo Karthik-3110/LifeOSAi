@@ -1,0 +1,19 @@
+import { useMemo, useState } from 'react'
+import { CalendarDays, Clock3, GraduationCap } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useAppData } from '../context/useAppData.js'
+import Card from '../components/ui/Card.jsx'
+
+const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const displayDate = (value) => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+export default function StudyTimetable() {
+  const { cache } = useAppData()
+  const semester = useMemo(() => (cache.semesters || []).find((item) => item.status === 'active') || cache.semesters?.[0], [cache.semesters])
+  const [view, setView] = useState('week')
+  if (!semester) return <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6"><Card className="text-center"><GraduationCap className="mx-auto text-accent-signal" size={34} /><h1 className="mt-4 font-display text-2xl font-semibold text-text-primary">Create your semester first</h1><p className="mt-2 text-text-secondary">Your personalised study rotation appears here after guided setup.</p><Link to="/semester-copilot" className="mt-5 inline-block text-sm font-semibold text-accent-signal">Open Semester Copilot</Link></Card></div>
+  const blocks = Array.isArray(semester.studyPlan) ? semester.studyPlan : []
+  const weekly = days.map((day) => ({ day, blocks: blocks.filter((block) => block.day === day).slice(0, 2) }))
+  return <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><div className="flex items-center gap-2 text-sm font-semibold text-accent-signal"><CalendarDays size={18} /> Separate from Planner</div><h1 className="mt-2 font-display text-3xl font-bold text-text-primary">Study Timetable</h1><p className="mt-2 text-text-secondary">Balanced subject rotation and revision blocks for {semester.name}.</p></div><div className="flex rounded-xl border border-border-subtle bg-bg-surface p-1">{[['week', 'Weekly grid'], ['day', 'Daily cards'], ['calendar', 'Calendar view']].map(([key, label]) => <button key={key} onClick={() => setView(key)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === key ? 'bg-accent-signal text-bg-base' : 'text-text-secondary'}`}>{label}</button>)}</div></div>{view === 'week' && <div className="mt-8 grid gap-3 md:grid-cols-2 xl:grid-cols-7">{weekly.map(({ day, blocks: dayBlocks }) => <Card key={day} className="min-h-48 p-4"><p className="font-semibold text-text-primary">{day}</p><div className="mt-4 space-y-3">{dayBlocks.length ? dayBlocks.map((block) => <Block key={block.id} block={block} />) : <p className="text-sm text-text-muted">Recovery / flexible study</p>}</div></Card>)}</div>}{view === 'day' && <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{blocks.slice(0, 12).map((block) => <Card key={block.id}><Block block={block} detail /></Card>)}</div>}{view === 'calendar' && <Card className="mt-8"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{blocks.slice(0, 28).map((block) => <div key={block.id} className="rounded-xl border border-border-subtle bg-bg-base p-3"><p className="text-xs text-text-muted">{displayDate(block.date)}</p><p className="mt-1 text-sm font-semibold text-text-primary">{block.title}</p><p className="mt-1 text-xs text-accent-signal">{block.startTime} · {block.estimatedTime} min</p></div>)}</div></Card>}</div>
+}
+function Block({ block, detail = false }) { return <div className="rounded-xl border border-border-subtle bg-bg-elevated p-3"><p className="text-xs text-accent-signal">{block.startTime} · {block.estimatedTime} min</p><p className="mt-1 text-sm font-semibold text-text-primary">{block.subject}</p>{detail && <p className="mt-1 text-xs text-text-secondary">{block.title} · {displayDate(block.date)}</p>}<span className="mt-2 inline-flex items-center gap-1 text-xs text-text-muted"><Clock3 size={12} /> {block.category}</span></div> }

@@ -1,26 +1,19 @@
 import { Router } from "express";
 import { body, param } from "express-validator";
-import { generateSemester, getSemester, getSemesters, updateAssignment } from "../controllers/semesterController.js";
+import { addSemesterItem, deleteSemesterItem, generateSemester, getSemester, getSemesters, updateSemesterItem } from "../controllers/semesterController.js";
 import validate from "../middleware/validate.js";
 
 const router = Router();
-
-router.get("/", getSemesters);
-router.get("/:id", [param("id").isMongoId()], validate, getSemester);
-router.post("/generate", [
-  body("manualEntry").optional().isObject(),
-  body("documents").optional().isArray({ max: 6 }),
-  body("documents.*.name").optional().isString().isLength({ min: 1, max: 180 }),
-  body("documents.*.type").optional().isString().isLength({ min: 1, max: 120 }),
-  body("documents.*.base64").optional().isString().isLength({ min: 1 }),
-], validate, generateSemester);
-router.patch("/:id/assignments/:assignmentId", [
-  param("id").isMongoId(),
-  param("assignmentId").isString().trim().isLength({ min: 1, max: 80 }),
-  body("status").optional().isIn(["pending", "completed", "overdue"]),
-  body("progress").optional().isInt({ min: 0, max: 100 }),
+const itemValidation = [
   body("title").optional().isString().trim().isLength({ min: 1, max: 180 }),
-  body("date").optional().isISO8601().toDate(),
-], validate, updateAssignment);
-
+  body("subject").optional().isString().trim().isLength({ max: 120 }),
+  body("date").optional().isISO8601(),
+  body("status").optional().isIn(["pending", "completed", "overdue"]),
+];
+router.get("/", getSemesters);
+router.post("/generate", [body("manualEntry").isObject(), body("manualEntry.semester").isString().trim().isLength({ min: 1, max: 160 }), body("manualEntry.subjects").isArray({ min: 1, max: 16 })], validate, generateSemester);
+router.post("/:id/items/:type", [param("id").isMongoId(), param("type").isIn(["exam", "assignment", "project"]), body("title").isString().trim().isLength({ min: 1, max: 180 }), body("date").isISO8601(), ...itemValidation], validate, addSemesterItem);
+router.patch("/:id/items/:type/:itemId", [param("id").isMongoId(), param("type").isIn(["exam", "assignment", "project"]), param("itemId").isString().trim().isLength({ min: 1, max: 100 }), ...itemValidation], validate, updateSemesterItem);
+router.delete("/:id/items/:type/:itemId", [param("id").isMongoId(), param("type").isIn(["exam", "assignment", "project"]), param("itemId").isString().trim().isLength({ min: 1, max: 100 })], validate, deleteSemesterItem);
+router.get("/:id", [param("id").isMongoId()], validate, getSemester);
 export default router;

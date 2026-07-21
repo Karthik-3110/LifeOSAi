@@ -3,6 +3,7 @@ import ApiError from "../utils/apiError.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { buildCursorFilter, getNextCursor, parseLimit, trimPage } from "../utils/query.js";
+import { createNotification } from "../services/notificationService.js";
 
 const goalProjection = "title description priority category progress dueDate status createdAt";
 
@@ -76,6 +77,18 @@ export const updateGoal = asyncHandler(async (req, res) => {
 
   if (!goal) {
     throw new ApiError(404, "Goal not found", "GOAL_NOT_FOUND");
+  }
+
+  if (goal.status === "done") {
+    await createNotification({
+      userId: req.user._id,
+      type: "goal",
+      title: "Semester goal completed",
+      message: `You completed “${goal.title}”. Keep the momentum going.`,
+      resourceType: "goal",
+      resourceId: String(goal._id),
+      dedupeKey: `goal-completed:${goal._id}`,
+    });
   }
 
   apiResponse(res, goal);

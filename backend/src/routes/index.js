@@ -9,6 +9,7 @@ import taskRoutes from "./taskRoutes.js";
 import userRoutes from "./userRoutes.js";
 import aiRoutes from "./aiRoutes.js";
 import semesterRoutes from "./semesterRoutes.js";
+import notificationRoutes from "./notificationRoutes.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
@@ -36,5 +37,6 @@ router.use("/analytics", analyticsRoutes);
 router.use("/billing", billingRoutes);
 router.use("/ai", aiRoutes);
 router.use("/semesters", semesterRoutes);
+router.use("/notifications", notificationRoutes);
 
 export default router;

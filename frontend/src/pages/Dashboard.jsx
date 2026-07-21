@@ -138,6 +138,7 @@ export default function Dashboard() {
   const recentGoals = dashboard?.recentGoals || []
   const upcoming = dashboard?.upcoming || dashboard?.upcomingTasks || []
   const brief = dashboard?.dailyBrief || {}
+  const semester = dashboard?.semester
 
   const askGoalCoach = async (goal) => {
     setAssistantOpen(true)
@@ -178,6 +179,13 @@ export default function Dashboard() {
         <StatCard label="Tasks completed" value={stats.completedTasks ?? 0} delta={`${stats.openTasks ?? 0} open`} />
         <StatCard label="Brain Dumps" value={stats.brainDumpsCreated ?? 0} delta="knowledge graph" />
         <StatCard label="Productivity Score" value={stats.productivityScore ?? stats.completionRate ?? 0} delta="AI estimate" />
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Current semester" value={semester?.name || 'Not set'} delta={semester ? `${semester.subjectCount || 0} subjects` : 'Set up your semester'} />
+        <StatCard label="Next exam" value={semester?.nextExam?.title || 'None scheduled'} delta={semester?.nextExam ? `${semester.nextExam.daysRemaining} days remaining` : 'Add an exam date'} />
+        <StatCard label="Upcoming assignment" value={semester?.nextAssignment?.title || 'Nothing due'} delta={semester?.nextAssignment?.date ? new Date(semester.nextAssignment.date).toLocaleDateString() : 'You are clear'} />
+        <StatCard label="Revision progress" value={`${semester?.revisionProgress ?? 0}%`} delta={`${stats.currentStudyStreak ?? 0} day study streak`} />
       </div>
 
       <Card className="mt-8">

@@ -2,9 +2,6 @@ import Goal from "../models/Goal.js";
 import BrainDump from "../models/BrainDump.js";
 import Task from "../models/Task.js";
 import Semester from "../models/Semester.js";
-import AIHistory from "../models/AIHistory.js";
-import { getSecondBrainMemory } from "../services/memoryService.js";
-import { generateDailyBrief } from "../services/openaiService.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
@@ -31,7 +28,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
   const today = startOfToday();
   const nextWeek = addDays(today, 7);
 
-  const [
+  let [
     goalStats,
     taskStats,
     recentGoals,
@@ -76,7 +73,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
       .limit(10)
       .lean(),
     Semester.findOne({ userId: req.user._id, status: "active" })
-      .select("name subjects assignments projects exams")
+      .select("name subjects assignments projects exams studyPlan")
       .sort({ updatedAt: -1 })
       .lean(),
     Goal.find({
@@ -100,6 +97,16 @@ export const getDashboard = asyncHandler(async (req, res) => {
       .limit(6)
       .lean(),
   ]);
+
+  // Aggregation and find queries should always yield arrays, but keeping this
+  // boundary defensive means incomplete legacy data can never break the UI.
+  const asArray = (value) => Array.isArray(value) ? value : [];
+  goalStats = asArray(goalStats);
+  taskStats = asArray(taskStats);
+  recentGoals = asArray(recentGoals);
+  upcomingTasks = asArray(upcomingTasks);
+  upcomingGoals = asArray(upcomingGoals);
+  todaysTasks = asArray(todaysTasks);
 
   const goalsByStatus = goalStats.reduce((acc, item) => {
     acc[item._id] = item.count;
@@ -136,6 +143,14 @@ export const getDashboard = asyncHandler(async (req, res) => {
   const completionRate = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const soonestDeadline = upcoming.find((item) => item.type === "deadline" || item.itemType === "goal");
   const topFocus = todaysTasks[0]?.category || recentGoals[0]?.category || "your highest priority subject";
+  const semesterExams = asArray(activeSemester?.exams)
+    .filter((item) => item?.date && new Date(item.date) >= today)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  const semesterDeadlines = [...asArray(activeSemester?.assignments), ...asArray(activeSemester?.projects)]
+    .filter((item) => item?.date && item.status !== "completed" && new Date(item.date) >= today)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  const nextExam = semesterExams[0] || null;
+  const nextAssignment = semesterDeadlines[0] || null;
 
   const fallbackBrief = {
     priorities: todaysTasks.map((task) => task.title).slice(0, 4),
@@ -145,34 +160,10 @@ export const getDashboard = asyncHandler(async (req, res) => {
     productivityScore: Math.min(100, Math.round((completionRate * 0.7) + ((goalsByStatus.done || 0) * 6) + Math.min(brainDumpCount, 10))),
   };
 
-  let dailyBrief = fallbackBrief;
-  try {
-    const memory = await getSecondBrainMemory(req.user._id);
-    const generatedBrief = await generateDailyBrief({
-      memory,
-      todaySummary: {
-        priorities: fallbackBrief.priorities,
-        upcomingDeadlines: fallbackBrief.upcomingDeadlines.map((item) => ({ title: item.title, date: item.date || item.dueDate })),
-        estimatedWorkloadMinutes: estimatedWorkload,
-        productivityScore: fallbackBrief.productivityScore,
-      },
-    });
-    dailyBrief = {
-      ...fallbackBrief,
-      greeting: generatedBrief.greeting || "",
-      studyRecommendation: generatedBrief.studyRecommendation || fallbackBrief.studyRecommendation,
-      suggestions: Array.isArray(generatedBrief.suggestions) ? generatedBrief.suggestions.slice(0, 3) : [],
-      productivityNote: generatedBrief.productivityNote || "",
-    };
-    await AIHistory.create({
-      userId: req.user._id,
-      action: "daily-brief",
-      input: "Generate daily brief",
-      output: dailyBrief,
-    });
-  } catch (error) {
-    // The deterministic brief keeps the dashboard usable if the AI provider is temporarily unavailable.
-  }
+  // Keep the bootstrap endpoint deterministic and fast. The dashboard brief is
+  // derived from cached workspace data, so an AI-provider delay can never hold
+  // up login or make the dashboard fail.
+  const dailyBrief = fallbackBrief;
 
   apiResponse(res, {
     stats: {
@@ -187,20 +178,24 @@ export const getDashboard = asyncHandler(async (req, res) => {
       brainDumpsCreated: brainDumpCount,
       productivityScore: Math.min(100, Math.round((completionRate * 0.7) + ((goalsByStatus.done || 0) * 6) + Math.min(brainDumpCount, 10))),
       estimatedWorkload,
+      currentStudyStreak: 0,
     },
     dailyBrief,
-    recentGoals,
-    upcomingTasks,
-    upcomingGoals,
+    recentGoals: asArray(recentGoals),
+    upcomingTasks: asArray(upcomingTasks),
+    upcomingGoals: asArray(upcomingGoals),
     upcoming,
     semester: activeSemester ? {
       _id: activeSemester._id,
       name: activeSemester.name,
-      subjectCount: activeSemester.subjects?.length || 0,
-      upcomingExamCount: activeSemester.exams?.filter((item) => item.date && new Date(item.date) >= today).length || 0,
-      assignmentCount: activeSemester.assignments?.length || 0,
+      subjectCount: asArray(activeSemester.subjects).length,
+      upcomingExamCount: semesterExams.length,
+      assignmentCount: asArray(activeSemester.assignments).length,
+      nextExam: nextExam ? { title: nextExam.title, date: nextExam.date, daysRemaining: Math.ceil((new Date(nextExam.date) - today) / 86400000) } : null,
+      nextAssignment: nextAssignment ? { title: nextAssignment.title, date: nextAssignment.date } : null,
+      revisionProgress: 0,
       completion: (() => {
-        const items = [...(activeSemester.assignments || []), ...(activeSemester.projects || [])];
+        const items = [...asArray(activeSemester.assignments), ...asArray(activeSemester.projects)];
         return items.length ? Math.round(items.reduce((sum, item) => sum + (Number(item.progress) || 0), 0) / items.length) : 0;
       })(),
     } : null,
