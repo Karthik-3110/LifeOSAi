@@ -1,5 +1,6 @@
 import ApiError from "../utils/apiError.js";
 
+
 const getMongoDuplicateMessage = (error) => {
   const field = Object.keys(error.keyPattern || {})[0] || "field";
   return `${field} already exists`;
