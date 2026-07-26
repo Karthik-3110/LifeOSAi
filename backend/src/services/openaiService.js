@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import ApiError from "../utils/apiError.js";
 
 const DEFAULT_MODEL = "gpt-4o-mini";
@@ -8,6 +7,8 @@ let client;
 let clientKey;
 let verifiedModel;
 let modelVerification;
+let OpenAIClient;
+let openAIImport;
 
 const getModel = () => process.env.OPENAI_MODEL?.trim() || DEFAULT_MODEL;
 
@@ -18,7 +19,23 @@ const getTimeout = () => {
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_TIMEOUT_MS;
 };
 
-const getClient = () => {
+const loadOpenAI = async () => {
+  if (OpenAIClient) return OpenAIClient;
+  if (!openAIImport) {
+    openAIImport = import("openai")
+      .then(({ default: OpenAI }) => {
+        OpenAIClient = OpenAI;
+        return OpenAIClient;
+      })
+      .catch((error) => {
+        openAIImport = undefined;
+        throw error;
+      });
+  }
+  return openAIImport;
+};
+
+const getClient = async () => {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new ApiError(
@@ -29,6 +46,7 @@ const getClient = () => {
   }
 
   if (!client || clientKey !== apiKey) {
+    const OpenAI = await loadOpenAI();
     client = new OpenAI({
       apiKey,
       timeout: getTimeout(),
@@ -136,7 +154,7 @@ const responseFormat = (name) => ({
 });
 
 export const generateStructuredResponse = async ({ system, prompt, schemaHint = "", responseName = "lifeos_response" }) => {
-  const openai = getClient();
+  const openai = await getClient();
   const selectedModel = getModel();
 
   try {

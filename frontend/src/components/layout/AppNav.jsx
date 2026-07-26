@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { BarChart3, CalendarDays, GraduationCap, LayoutDashboard, Map, Settings, Table2 } from 'lucide-react'
+import { BarChart3, CalendarDays, GraduationCap, LayoutDashboard, Map, Settings } from 'lucide-react'
 import Logo from '../ui/Logo.jsx'
 
 const navItems = [
@@ -8,7 +8,6 @@ const navItems = [
   { to: '/planner', label: 'Planner', icon: CalendarDays },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/semester-copilot', label: 'Semester Copilot', icon: GraduationCap },
-  { to: '/study-timetable', label: 'Study Timetable', icon: Table2 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

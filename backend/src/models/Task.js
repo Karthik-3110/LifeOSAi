@@ -84,6 +84,24 @@ const taskSchema = new Schema(
       default: "planner",
       index: true,
     },
+    semesterId: {
+      type: Schema.Types.ObjectId,
+      ref: "Semester",
+      default: null,
+      index: true,
+    },
+    semesterItemId: {
+      type: String,
+      default: "",
+      trim: true,
+      index: true,
+    },
+    revisionSubjectId: {
+      type: String,
+      default: "",
+      trim: true,
+      index: true,
+    },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -97,6 +115,7 @@ const taskSchema = new Schema(
 taskSchema.index({ userId: 1, date: 1 });
 taskSchema.index({ userId: 1, completed: 1, date: 1 });
 taskSchema.index({ userId: 1, source: 1, date: 1 });
+taskSchema.index({ userId: 1, semesterId: 1, semesterItemId: 1 });
 taskSchema.index({ userId: 1, category: 1, priority: 1 });
 
 const Task = mongoose.model("Task", taskSchema);

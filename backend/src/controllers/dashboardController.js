@@ -33,10 +33,11 @@ export const getDashboard = asyncHandler(async (req, res) => {
     taskStats,
     recentGoals,
     upcomingTasks,
+    activeSemester,
     upcomingGoals,
     brainDumpCount,
     todaysTasks,
-    activeSemester,
+    revisionStats,
   ] = await Promise.all([
     Goal.aggregate([
       { $match: { userId: req.user._id } },
@@ -73,7 +74,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
       .limit(10)
       .lean(),
     Semester.findOne({ userId: req.user._id, status: "active" })
-      .select("name subjects assignments projects exams studyPlan")
+      .select("name subjects assignments projects exams")
       .sort({ updatedAt: -1 })
       .lean(),
     Goal.find({
@@ -96,6 +97,10 @@ export const getDashboard = asyncHandler(async (req, res) => {
       .sort({ priority: -1, date: 1, _id: -1 })
       .limit(6)
       .lean(),
+    Task.aggregate([
+      { $match: { userId: req.user._id, source: "semester-copilot", tag: "Semester Copilot", title: /^Revision:/ } },
+      { $group: { _id: "$completed", count: { $sum: 1 } } },
+    ]),
   ]);
 
   // Aggregation and find queries should always yield arrays, but keeping this
@@ -107,6 +112,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
   upcomingTasks = asArray(upcomingTasks);
   upcomingGoals = asArray(upcomingGoals);
   todaysTasks = asArray(todaysTasks);
+  revisionStats = asArray(revisionStats);
 
   const goalsByStatus = goalStats.reduce((acc, item) => {
     acc[item._id] = item.count;
@@ -144,13 +150,16 @@ export const getDashboard = asyncHandler(async (req, res) => {
   const soonestDeadline = upcoming.find((item) => item.type === "deadline" || item.itemType === "goal");
   const topFocus = todaysTasks[0]?.category || recentGoals[0]?.category || "your highest priority subject";
   const semesterExams = asArray(activeSemester?.exams)
-    .filter((item) => item?.date && new Date(item.date) >= today)
+    .filter((item) => item?.date && item.status !== "completed" && new Date(item.date) >= today)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
   const semesterDeadlines = [...asArray(activeSemester?.assignments), ...asArray(activeSemester?.projects)]
     .filter((item) => item?.date && item.status !== "completed" && new Date(item.date) >= today)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
   const nextExam = semesterExams[0] || null;
   const nextAssignment = semesterDeadlines[0] || null;
+  const revisionByCompletion = revisionStats.reduce((acc, item) => ({ ...acc, [item._id ? "completed" : "open"]: item.count }), {});
+  const totalRevisionTasks = (revisionByCompletion.completed || 0) + (revisionByCompletion.open || 0);
+  const revisionProgress = totalRevisionTasks ? Math.round(((revisionByCompletion.completed || 0) / totalRevisionTasks) * 100) : 0;
 
   const fallbackBrief = {
     priorities: todaysTasks.map((task) => task.title).slice(0, 4),
@@ -191,11 +200,13 @@ export const getDashboard = asyncHandler(async (req, res) => {
       subjectCount: asArray(activeSemester.subjects).length,
       upcomingExamCount: semesterExams.length,
       assignmentCount: asArray(activeSemester.assignments).length,
-      nextExam: nextExam ? { title: nextExam.title, date: nextExam.date, daysRemaining: Math.ceil((new Date(nextExam.date) - today) / 86400000) } : null,
-      nextAssignment: nextAssignment ? { title: nextAssignment.title, date: nextAssignment.date } : null,
-      revisionProgress: 0,
+      nextExam: nextExam ? { title: nextExam.title, subject: nextExam.subject, date: nextExam.date, daysRemaining: Math.ceil((new Date(nextExam.date) - today) / 86400000) } : null,
+      nextAssignment: nextAssignment ? { title: nextAssignment.title, subject: nextAssignment.subject, date: nextAssignment.date, daysRemaining: Math.ceil((new Date(nextAssignment.date) - today) / 86400000) } : null,
+      revisionProgress,
+      completedRevisionTasks: revisionByCompletion.completed || 0,
+      totalRevisionTasks,
       completion: (() => {
-        const items = [...asArray(activeSemester.assignments), ...asArray(activeSemester.projects)];
+        const items = [...asArray(activeSemester.assignments), ...asArray(activeSemester.projects), ...asArray(activeSemester.exams)];
         return items.length ? Math.round(items.reduce((sum, item) => sum + (Number(item.progress) || 0), 0) / items.length) : 0;
       })(),
     } : null,

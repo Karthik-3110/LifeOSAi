@@ -1,6 +1,8 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 
+let firebaseAdmin;
+
 const getFirebaseCredential = () => {
   const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env;
 
@@ -16,14 +18,14 @@ const getFirebaseCredential = () => {
 };
 
 export const getFirebaseAdmin = () => {
-  if (!getApps().length) {
-    initializeApp({
+  if (!firebaseAdmin) {
+    firebaseAdmin = getApps()[0] || initializeApp({
       credential: getFirebaseCredential(),
     });
     console.log("Firebase Admin initialized");
   }
 
-  return getApps()[0];
+  return firebaseAdmin;
 };
 
 export const getFirebaseAuth = () => {

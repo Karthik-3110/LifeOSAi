@@ -113,6 +113,22 @@ function adjustTaskStats(dashboard, nextTask, previousTask = null, mode = 'upser
   return { ...dashboard, stats }
 }
 
+function syncRevisionProgress(dashboard, nextTask, previousTask = null, mode = 'upsert') {
+  if (!dashboard?.semester) return dashboard
+  const isRevision = (task) => task?.source === 'semester-copilot' && String(task.title || '').startsWith('Revision:')
+  const previousIsRevision = isRevision(previousTask)
+  const nextIsRevision = isRevision(nextTask)
+  if (!previousIsRevision && !nextIsRevision) return dashboard
+
+  let completed = Number(dashboard.semester.completedRevisionTasks) || 0
+  let total = Number(dashboard.semester.totalRevisionTasks) || 0
+  if (mode === 'create' && nextIsRevision) { total += 1; if (nextTask.completed) completed += 1 }
+  if (mode === 'delete' && previousIsRevision) { total = Math.max(0, total - 1); if (previousTask.completed) completed = Math.max(0, completed - 1) }
+  if (mode === 'upsert' && previousIsRevision && nextIsRevision && previousTask.completed !== nextTask.completed) completed = Math.max(0, completed + (nextTask.completed ? 1 : -1))
+  const revisionProgress = total ? Math.round((completed / total) * 100) : 0
+  return { ...dashboard, semester: { ...dashboard.semester, completedRevisionTasks: completed, totalRevisionTasks: total, revisionProgress } }
+}
+
 function updateTaskInPlannerWeeks(plannerWeeks, task, mode = 'upsert') {
   const nextWeeks = {}
 
@@ -264,35 +280,65 @@ export function AppDataProvider({ children }) {
 
   const createSemester = useCallback(async (payload) => {
     const result = await api.generateSemester(payload)
+    const [dashboard, notifications] = await Promise.all([api.dashboard(), api.listNotifications()])
     setCache((current) => ({
       ...current,
       semesters: [result.semester, ...(current.semesters || []).filter((item) => item._id !== result.semester._id)],
       goals: current.goals ? [...(result.created?.goals || []), ...current.goals] : current.goals,
       plannerWeeks: (result.created?.tasks || []).reduce((weeks, task) => updateTaskInPlannerWeeks(weeks, task, 'upsert'), current.plannerWeeks),
-      notifications: result.notification ? { items: [result.notification, ...(current.notifications?.items || [])], unreadCount: (current.notifications?.unreadCount || 0) + (result.notification.read ? 0 : 1) } : current.notifications,
+      notifications: { items: Array.isArray(notifications.items) ? notifications.items : [], unreadCount: Number(notifications.unreadCount) || 0 },
       analytics: null,
-      dashboard: null,
+      dashboard,
     }))
     return result
   }, [])
 
+  // Semester changes can affect the dashboard, reminders, and any cached
+  // planner week. Refresh only those data slices instead of reloading the app.
+  const syncSemesterWorkspace = useCallback(async (result, deletedId = '') => {
+    const semester = result?.semester || result
+    const weekEntries = Object.entries(cache.plannerWeeks || {})
+    const [dashboard, notifications, ...plannerResponses] = await Promise.all([
+      api.dashboard(),
+      api.listNotifications(),
+      ...weekEntries.map(([, week]) => api.listTasks(`?from=${encodeURIComponent(week.range.from)}&to=${encodeURIComponent(week.range.to)}&limit=200`)),
+    ])
+    setCache((current) => ({
+      ...current,
+      semesters: deletedId
+        ? (current.semesters || []).filter((item) => item._id !== deletedId)
+        : (current.semesters || []).map((item) => item._id === semester._id ? semester : item),
+      plannerWeeks: Object.fromEntries(weekEntries.map(([key, week], index) => [key, { ...week, items: plannerResponses[index]?.items || [], loadedAt: Date.now() }])),
+      dashboard,
+      notifications: { items: Array.isArray(notifications.items) ? notifications.items : [], unreadCount: Number(notifications.unreadCount) || 0 },
+      analytics: null,
+    }))
+    return semester
+  }, [cache.plannerWeeks])
+
   const updateSemesterItem = useCallback(async (semesterId, type, itemId, payload) => {
     const updated = await api.updateSemesterItem(semesterId, type, itemId, payload)
-    setCache((current) => ({ ...current, semesters: current.semesters?.map((item) => item._id === semesterId ? updated : item) || current.semesters, dashboard: null }))
-    return updated
-  }, [])
+    return syncSemesterWorkspace(updated)
+  }, [syncSemesterWorkspace])
 
   const addSemesterItem = useCallback(async (semesterId, type, payload) => {
     const updated = await api.addSemesterItem(semesterId, type, payload)
-    setCache((current) => ({ ...current, semesters: current.semesters?.map((item) => item._id === semesterId ? updated : item) || current.semesters, dashboard: null }))
-    return updated
-  }, [])
+    return syncSemesterWorkspace(updated)
+  }, [syncSemesterWorkspace])
 
   const deleteSemesterItem = useCallback(async (semesterId, type, itemId) => {
     const updated = await api.deleteSemesterItem(semesterId, type, itemId)
-    setCache((current) => ({ ...current, semesters: current.semesters?.map((item) => item._id === semesterId ? updated : item) || current.semesters, dashboard: null }))
-    return updated
-  }, [])
+    return syncSemesterWorkspace(updated)
+  }, [syncSemesterWorkspace])
+
+  const updateSemester = useCallback(async (id, payload) => syncSemesterWorkspace(await api.updateSemester(id, payload)), [syncSemesterWorkspace])
+  const deleteSemester = useCallback(async (id) => { await api.deleteSemester(id); return syncSemesterWorkspace(null, id) }, [syncSemesterWorkspace])
+  const addSubject = useCallback(async (semesterId, payload) => syncSemesterWorkspace(await api.addSubject(semesterId, payload)), [syncSemesterWorkspace])
+  const updateSubject = useCallback(async (semesterId, subjectId, payload) => syncSemesterWorkspace(await api.updateSubject(semesterId, subjectId, payload)), [syncSemesterWorkspace])
+  const deleteSubject = useCallback(async (semesterId, subjectId) => syncSemesterWorkspace(await api.deleteSubject(semesterId, subjectId)), [syncSemesterWorkspace])
+  const addTimetableLecture = useCallback(async (semesterId, payload) => syncSemesterWorkspace(await api.addTimetableLecture(semesterId, payload)), [syncSemesterWorkspace])
+  const updateTimetableLecture = useCallback(async (semesterId, lectureId, payload) => syncSemesterWorkspace(await api.updateTimetableLecture(semesterId, lectureId, payload)), [syncSemesterWorkspace])
+  const deleteTimetableLecture = useCallback(async (semesterId, lectureId) => syncSemesterWorkspace(await api.deleteTimetableLecture(semesterId, lectureId)), [syncSemesterWorkspace])
 
   const markNotificationRead = useCallback(async (id) => {
     await api.markNotificationRead(id)
@@ -415,7 +461,7 @@ export function AppDataProvider({ children }) {
     setCache((current) => ({
       ...current,
       plannerWeeks: updateTaskInPlannerWeeks(current.plannerWeeks, tempTask, 'upsert'),
-      dashboard: syncUpcomingTask(adjustTaskStats(current.dashboard, tempTask, null, 'create'), tempTask),
+      dashboard: syncRevisionProgress(syncUpcomingTask(adjustTaskStats(current.dashboard, tempTask, null, 'create'), tempTask), tempTask, null, 'create'),
     }))
 
     try {
@@ -448,7 +494,7 @@ export function AppDataProvider({ children }) {
     setCache((current) => ({
       ...current,
       plannerWeeks: updateTaskInPlannerWeeks(current.plannerWeeks, optimisticTask, 'upsert'),
-      dashboard: syncUpcomingTask(adjustTaskStats(current.dashboard, optimisticTask, task), optimisticTask, task),
+      dashboard: syncRevisionProgress(syncUpcomingTask(adjustTaskStats(current.dashboard, optimisticTask, task), optimisticTask, task), optimisticTask, task),
     }))
 
     try {
@@ -471,7 +517,7 @@ export function AppDataProvider({ children }) {
     setCache((current) => ({
       ...current,
       plannerWeeks: updateTaskInPlannerWeeks(current.plannerWeeks, task, 'delete'),
-      dashboard: syncUpcomingTask(adjustTaskStats(current.dashboard, null, task, 'delete'), task, task, 'delete'),
+      dashboard: syncRevisionProgress(syncUpcomingTask(adjustTaskStats(current.dashboard, null, task, 'delete'), task, task, 'delete'), null, task, 'delete'),
     }))
 
     try {
@@ -615,22 +661,29 @@ export function AppDataProvider({ children }) {
     setCache({ ...emptyCache, userId: user._id })
 
     runOnce(`bootstrap:${user._id}`, async () => {
-      const [dashboard, goalsData, plannerData, brainDumpData, analytics, billing, semesterData, notificationData] = await Promise.all([
-        api.dashboard(),
-        api.listGoals('?limit=50'),
-        api.listTasks(`?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}&limit=200`),
-        api.listBrainDumps(),
-        api.analytics(),
-        api.billing(),
-        api.listSemesters(),
-        api.listNotifications(),
+      // These independent workspace slices are deliberately requested together
+      // after authentication. Each result is retained in this shared cache so
+      // route changes do not repeat the request. Resource keys are shared with
+      // page-level ensure functions, preventing mount-time duplicate requests.
+      const [dashboard, goalsData, plannerData, latestCanvas, brainDumpData, analytics, semesterData, notificationData, profile] = await Promise.all([
+        runOnce('dashboard', () => api.dashboard()),
+        runOnce('goals', () => api.listGoals('?limit=50')),
+        runOnce(`planner:${weekKey}`, () => api.listTasks(`?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}&limit=200`)),
+        runOnce('canvas:latest', () => api.getCanvas()),
+        runOnce('brainDumps', () => api.listBrainDumps()),
+        runOnce('analytics', () => api.analytics()),
+        runOnce('semesters', () => api.listSemesters()),
+        runOnce('notifications', () => api.listNotifications()),
+        // The minimal profile returned by the authentication request is already
+        // available here, so do not issue a duplicate /auth/me request.
+        Promise.resolve(user),
       ])
 
       const goals = goalsData.items || []
       const brainDumps = Array.isArray(brainDumpData.items) ? brainDumpData.items : []
-      const canvases = Object.fromEntries((await Promise.all(brainDumps.map(async (brainDump) => {
-        try { return [brainDump._id, await api.getCanvasByBrainDump(brainDump._id)] } catch { return [brainDump._id, { brainDump, nodes: [], edges: [] }] }
-      }))))
+      const canvases = latestCanvas?.brainDump?._id
+        ? { [latestCanvas.brainDump._id]: latestCanvas }
+        : {}
       setCache((current) => ({
         ...current,
         userId: user._id,
@@ -643,11 +696,10 @@ export function AppDataProvider({ children }) {
         brainDumps,
         canvases,
         analytics,
-        billing,
         semesters: Array.isArray(semesterData.items) ? semesterData.items : [],
         notifications: { items: Array.isArray(notificationData.items) ? notificationData.items : [], unreadCount: Number(notificationData.unreadCount) || 0 },
-        profile: user,
-        settings: user.settings || {},
+        profile,
+        settings: profile?.settings || {},
         bootstrapped: true,
       }))
     }).catch(() => undefined)
@@ -658,7 +710,6 @@ export function AppDataProvider({ children }) {
     import('../pages/Analytics.jsx')
     import('../pages/Settings.jsx')
     import('../pages/SemesterCopilot.jsx')
-    import('../pages/StudyTimetable.jsx')
   }, [cache.bootstrapped, cache.userId, runOnce, user])
 
   const value = useMemo(() => ({
@@ -676,9 +727,17 @@ export function AppDataProvider({ children }) {
     ensureNotifications,
     refreshBilling,
     createSemester,
+    updateSemester,
+    deleteSemester,
+    addSubject,
+    updateSubject,
+    deleteSubject,
     addSemesterItem,
     updateSemesterItem,
     deleteSemesterItem,
+    addTimetableLecture,
+    updateTimetableLecture,
+    deleteTimetableLecture,
     markNotificationRead,
     markAllNotificationsRead,
     clearNotifications,
@@ -699,12 +758,20 @@ export function AppDataProvider({ children }) {
     cache,
     createBrainDump,
     createSemester,
+    updateSemester,
+    deleteSemester,
+    addSubject,
+    updateSubject,
+    deleteSubject,
     createGoal,
     createTask,
     deleteBrainDump,
     deleteGoal,
     deleteTask,
     deleteSemesterItem,
+    addTimetableLecture,
+    updateTimetableLecture,
+    deleteTimetableLecture,
     duplicateBrainDump,
     ensureAnalytics,
     ensureBilling,

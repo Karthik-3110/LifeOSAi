@@ -12,7 +12,7 @@ const syncReminders = async (user) => {
   const today = startOfToday();
   const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
   const semesters = await Semester.find({ userId: user._id, status: "active" }).select("name assignments projects exams").lean();
-  const tasks = await Task.find({ userId: user._id, completed: false, date: { $gte: today, $lt: tomorrow } }).select("_id title date").lean();
+  const tasks = await Task.find({ userId: user._id, completed: false, date: { $gte: today, $lt: tomorrow } }).select("_id title date source").lean();
   const jobs = [];
 
   for (const semester of Array.isArray(semesters) ? semesters : []) {
@@ -26,12 +26,12 @@ const syncReminders = async (user) => {
       for (const item of Array.isArray(items) ? items : []) {
         const dueDate = item?.date && new Date(item.date);
         if (dueDate && dueDate >= today && dueDate < new Date(tomorrow.getTime() + 86400000) && item.status !== "completed") {
-          jobs.push(createNotification({ userId: user._id, type: kind, title: `${kind === "project" ? "Project" : "Assignment"} due today`, message: `${item.title} needs attention today.`, resourceType: "semester", resourceId: String(semester._id), dedupeKey: `${kind}:${semester._id}:${item.id}:${dateKey(dueDate)}` }));
+          jobs.push(createNotification({ userId: user._id, type: kind, title: kind === "project" ? "Project deadline" : "Assignment due today", message: `${item.title} needs attention today.`, resourceType: "semester", resourceId: String(semester._id), dedupeKey: `${kind}:${semester._id}:${item.id}:${dateKey(dueDate)}` }));
         }
       }
     }
   }
-  for (const task of Array.isArray(tasks) ? tasks : []) jobs.push(createNotification({ userId: user._id, type: "planner", title: "Planner reminder", message: task.title, resourceType: "task", resourceId: String(task._id), dedupeKey: `planner:${task._id}:${dateKey(today)}` }));
+  for (const task of Array.isArray(tasks) ? tasks : []) jobs.push(createNotification({ userId: user._id, type: task.title.startsWith("Revision:") ? "revision" : "planner", title: task.title.startsWith("Revision:") ? "Revision reminder" : "Planner reminder", message: task.title, resourceType: "task", resourceId: String(task._id), dedupeKey: `planner:${task._id}:${dateKey(today)}` }));
   if ((user.brainDumpCredits ?? 0) <= 1) jobs.push(createNotification({ userId: user._id, type: "credits", title: "Brain Dump credits running low", message: "You have one or no Brain Dump credits remaining.", resourceType: "billing", dedupeKey: `credits:${dateKey(today)}` }));
   await Promise.all(jobs);
 };

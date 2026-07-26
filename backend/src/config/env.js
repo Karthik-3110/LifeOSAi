@@ -1,9 +1,6 @@
-const requiredEnvVars = [
-  "MONGO_URI",
-  "FIREBASE_PROJECT_ID",
-  "FIREBASE_CLIENT_EMAIL",
-  "FIREBASE_PRIVATE_KEY",
-];
+// Firebase credentials are checked on the first authenticated request. Keeping
+// them out of the startup gate allows the health endpoint to stay lightweight.
+const requiredEnvVars = ["MONGO_URI"];
 
 export const validateEnv = () => {
   const missing = requiredEnvVars.filter((key) => !process.env[key]);

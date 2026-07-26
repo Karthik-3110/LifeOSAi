@@ -14,17 +14,6 @@ import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
-router.get("/health", (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      status: "ok",
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
-    },
-  });
-});
-
 router.use("/auth", requireAuth, authRoutes);
 
 router.use(requireAuth);

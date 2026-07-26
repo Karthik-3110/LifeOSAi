@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import { Brain, CalendarDays, CheckCircle2, Clock3, Edit3, Map, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Bell, Brain, CalendarDays, CheckCircle2, Clock3, Edit3, Map, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/useAuth.js'
 import { useAppData } from '../context/useAppData.js'
 import { api } from '../lib/api.js'
@@ -142,6 +142,7 @@ export default function Dashboard() {
   const semester = asRecord(dashboard?.semester)
   const nextExam = asRecord(semester.nextExam)
   const nextAssignment = asRecord(semester.nextAssignment)
+  const notifications = asArray(cache.notifications?.items).filter((item) => item && typeof item === 'object').slice(0, 3)
 
   const askGoalCoach = async (goal) => {
     setAssistantOpen(true)
@@ -186,11 +187,16 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Current semester" value={asText(semester.name, 'Not set')} delta={semester.name ? `${asNumber(semester.subjectCount)} subjects` : 'Set up your semester'} />
-        <StatCard label="Next exam" value={asText(nextExam.title, 'None scheduled')} delta={nextExam.title ? `${asNumber(nextExam.daysRemaining)} days remaining` : 'Add an exam date'} />
-        <StatCard label="Upcoming assignment" value={asText(nextAssignment.title, 'Nothing due')} delta={nextAssignment.date ? displayDate(nextAssignment.date, 'You are clear') : 'You are clear'} />
-        <StatCard label="Revision progress" value={`${asNumber(semester.revisionProgress)}%`} delta={`${asNumber(stats.currentStudyStreak)} day study streak`} />
+        <StatCard label="Current semester" value={asText(semester.name, 'Not set')} delta={semester.name ? `${asNumber(semester.subjectCount)} subjects · ${asNumber(semester.completion)}% complete` : 'Set up your semester'} />
+        <StatCard label="Next exam" value={asText(nextExam.title, 'No upcoming exams.')} delta={nextExam.title ? `${asText(nextExam.subject, 'General')} · ${asNumber(nextExam.daysRemaining)} days remaining` : 'Add an exam date'} />
+        <StatCard label="Upcoming assignment" value={asText(nextAssignment.title, 'No upcoming assignments.')} delta={nextAssignment.title ? `${asText(nextAssignment.subject, 'General')} · ${asNumber(nextAssignment.daysRemaining)} days remaining` : 'You are clear'} />
+        <StatCard label="Revision progress" value={`${asNumber(semester.revisionProgress)}%`} delta={`${asNumber(semester.completedRevisionTasks)} / ${asNumber(semester.totalRevisionTasks)} revision tasks`} />
       </div>
+
+      <Card className="mt-6">
+        <div className="flex items-center gap-2"><Bell className="text-accent-signal" size={19} /><h2 className="font-display text-xl font-semibold text-text-primary">Semester reminders</h2></div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">{notifications.length ? notifications.map((item) => <div key={item._id} className="rounded-xl border border-border-subtle bg-bg-base p-3"><p className="text-sm font-semibold text-text-primary">{asText(item.title)}</p><p className="mt-1 text-xs text-text-secondary">{asText(item.message)}</p></div>) : <p className="text-sm text-text-secondary">No new semester reminders.</p>}</div>
+      </Card>
 
       <Card className="mt-8">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">

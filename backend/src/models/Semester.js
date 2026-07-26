@@ -14,6 +14,9 @@ const semesterSchema = new Schema(
     assignments: { type: [Schema.Types.Mixed], default: [] },
     projects: { type: [Schema.Types.Mixed], default: [] },
     exams: { type: [Schema.Types.Mixed], default: [] },
+    // Kept distinct from planner tasks: these are scheduled college lectures,
+    // not work that the student needs to complete.
+    collegeTimetable: { type: [Schema.Types.Mixed], default: [] },
     calendar: { type: [Schema.Types.Mixed], default: [] },
     studyPlan: { type: [Schema.Types.Mixed], default: [] },
     revisionPlan: { type: [Schema.Types.Mixed], default: [] },
