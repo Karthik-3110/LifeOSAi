@@ -12,8 +12,8 @@ function DayColumn({ day, tasks, onAdd, onDelete, onToggle }) {
   return (
     <section
       ref={setNodeRef}
-      className={`min-h-[460px] rounded-2xl border bg-bg-surface p-4 transition ${
-        isOver ? 'border-accent-signal/70' : 'border-border-subtle'
+      className={`planner-day-card min-h-[460px] rounded-[20px] border bg-bg-surface p-4 transition ${
+        isOver ? 'border-node-task/70 bg-node-task/5 shadow-[0_12px_30px_rgba(1,111,185,0.1)]' : 'border-border-subtle'
       }`}
     >
       <div className="flex items-start justify-between gap-3">

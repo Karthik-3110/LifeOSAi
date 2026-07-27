@@ -1,18 +1,33 @@
 export const testimonials = [
   {
-    name: 'Amelia Cheng',
-    role: 'Founder, Kindling',
-    quote: 'LifeOS turned my scattered launch notes into a map I could actually execute.',
+    name: 'Aarav Mehta',
+    role: 'Computer Science Student',
+    quote: "Keeps my semester, projects and ideas in one place. I don't need five different apps anymore.",
   },
   {
-    name: 'Marcus Hale',
-    role: 'Product lead',
-    quote: 'The canvas gives our weekly planning the missing link between ambition and calendar reality.',
+    name: 'Maya Chen',
+    role: 'Product Designer',
+    quote: 'The Canvas completely changed how I brainstorm.',
   },
   {
-    name: 'Priya Natarajan',
-    role: 'Solo builder',
-    quote: "It is the first AI product that does not feel like a chatbot. It feels like a co-founder.",
+    name: 'Ishaan Kapoor',
+    role: 'Engineering Student',
+    quote: 'The Semester Copilot planned my revision automatically.',
+  },
+  {
+    name: 'Sofia Martinez',
+    role: 'Indie Developer',
+    quote: 'I finally finish what I plan.',
+  },
+  {
+    name: 'Noah Williams',
+    role: 'Startup Founder',
+    quote: 'My productivity increased every week.',
+  },
+  {
+    name: 'Ananya Rao',
+    role: 'Research Assistant',
+    quote: 'The AI Daily Brief keeps me focused.',
   },
 ]
 

@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom'
 
 const variants = {
-  primary: 'bg-accent-signal text-text-primary surface-shadow hover:-translate-y-0.5 hover:bg-accent-signal-hi',
-  secondary: 'border border-border-subtle bg-bg-elevated text-text-primary hover:-translate-y-0.5 hover:bg-bg-surface-hi',
+  primary: 'bg-gradient-to-r from-accent-signal to-accent-signal-hi text-white shadow-[0_10px_24px_rgba(236,78,32,0.24)] hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_14px_30px_rgba(255,149,5,0.3)]',
+  secondary: 'border border-node-task/40 bg-bg-surface text-node-task hover:-translate-y-0.5 hover:bg-node-task/10',
   ghost: 'text-text-secondary hover:bg-bg-surface-hi hover:text-text-primary',
 }
 
@@ -22,7 +22,7 @@ export default function Button({
   ...props
 }) {
   const classes = [
-    'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-signal focus-visible:ring-offset-2 focus-visible:ring-offset-bg-base disabled:cursor-not-allowed disabled:opacity-60',
+    'inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-node-task focus-visible:ring-offset-2 focus-visible:ring-offset-bg-base disabled:cursor-not-allowed disabled:opacity-60',
     variants[variant],
     sizes[size],
     className,

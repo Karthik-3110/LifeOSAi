@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom'
 import logoImage from '../../assets/logo.png'
 
-export default function Logo({ compact = false }) {
+export default function Logo({ compact = false, className = '' }) {
   return (
-    <Link to="/" className="group inline-flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-signal">
+    <Link to="/" className={`group inline-flex items-center gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-signal ${className}`}>
       <img
         src={logoImage}
         alt="LifeOS AI"

@@ -18,7 +18,7 @@ export default function Analytics() {
   }, [analytics, ensureAnalytics])
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="page-analytics mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="font-display text-3xl font-bold text-text-primary sm:text-4xl">Your momentum, in numbers.</h1>
       <p className="mt-2 text-text-secondary">Last 6 months across goals, tasks, and focus.</p>
       {error && <div className="mt-6 rounded-xl border border-node-deadline/30 bg-node-deadline/10 px-4 py-3 text-sm text-node-deadline">{error}</div>}

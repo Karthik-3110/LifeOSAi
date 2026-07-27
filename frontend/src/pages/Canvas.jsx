@@ -12,7 +12,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { Brain, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, Copy, Download, Edit3, FileText, Flag, GitBranch, LayoutGrid, Redo2, RefreshCcw, Save, Search, Target, Trash2, Undo2, X } from 'lucide-react'
 import Button from '../components/ui/Button.jsx'
-import Card from '../components/ui/Card.jsx'
+import Modal from '../components/ui/Modal.jsx'
 import GoalNode from '../components/canvas/GoalNode.jsx'
 import TaskNode from '../components/canvas/TaskNode.jsx'
 import DeadlineNode from '../components/canvas/DeadlineNode.jsx'
@@ -161,7 +161,7 @@ export default function Canvas() {
       return
     }
     pushHistory()
-    setEdges((currentEdges) => addEdge({ ...params, animated: true, style: { stroke: 'var(--accent-signal)' } }, currentEdges))
+    setEdges((currentEdges) => addEdge({ ...params, animated: true, style: { stroke: 'var(--node-task)' } }, currentEdges))
   }, [activeBrainDumpId, pushHistory, setEdges])
 
   const addNode = (type) => {
@@ -421,7 +421,7 @@ export default function Canvas() {
         target: node.id,
         label: node.type === 'deadline' ? 'deadline' : node.type === 'task' ? 'next action' : 'relates',
         animated: true,
-        style: { stroke: 'var(--accent-signal)' },
+        style: { stroke: 'var(--node-task)' },
       }))
     setEdges((currentEdges) => {
       const existing = new Set(currentEdges.map((edge) => `${edge.source}:${edge.target}`))
@@ -462,7 +462,7 @@ export default function Canvas() {
   }
 
   return (
-    <div className={`relative h-[calc(100vh-4rem)] overflow-hidden bg-bg-base lg:grid ${sidebarCollapsed ? 'lg:grid-cols-[72px_1fr]' : 'lg:grid-cols-[280px_1fr]'}`}>
+    <div className={`page-canvas relative h-[calc(100vh-4rem)] overflow-hidden bg-bg-base lg:grid ${sidebarCollapsed ? 'lg:grid-cols-[72px_1fr]' : 'lg:grid-cols-[280px_1fr]'}`}>
       <aside className={`absolute left-4 top-4 z-30 max-h-[calc(100vh-7rem)] overflow-hidden rounded-2xl border border-border-subtle bg-bg-surface/95 shadow-2xl shadow-black/20 backdrop-blur-xl transition-all lg:static lg:z-auto lg:h-full lg:max-h-none lg:rounded-none lg:border-y-0 lg:border-l-0 ${sidebarCollapsed ? 'w-16 lg:w-auto' : 'w-[min(18rem,calc(100%-2rem))] lg:w-auto'}`}>
         <div className="border-b border-border-subtle p-4">
           <div className="flex items-center gap-2">
@@ -540,7 +540,7 @@ export default function Canvas() {
 
         {!assistantOpen && (
           <button
-            className="absolute bottom-5 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent-signal text-text-primary shadow-2xl shadow-black/25 transition hover:scale-105 hover:bg-accent-signal-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-signal"
+            className="absolute bottom-5 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-2xl bg-node-task text-white shadow-2xl shadow-node-task/25 transition hover:scale-105 hover:bg-node-task focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-node-task"
             onClick={() => setAssistantOpen(true)}
             aria-label="Open assistant"
             title="Open assistant"
@@ -575,10 +575,10 @@ export default function Canvas() {
           onPaneClick={() => setSelectedNodeId(null)}
           onNodeDragStart={pushHistory}
           fitView
-          className="bg-bg-base"
+          className="canvas-grid bg-bg-base"
         >
-          <Background color="var(--border-subtle)" gap={26} />
-          <Controls className="!border !border-border-subtle !bg-bg-surface !shadow-2xl" />
+          <Background color="var(--border-subtle)" gap={22} />
+          <Controls className="!rounded-2xl !border !border-border-subtle !bg-bg-surface !shadow-2xl" />
           <MiniMap
             className="!rounded-2xl !border !border-border-subtle !bg-bg-surface"
             nodeColor={(node) => {
@@ -620,7 +620,8 @@ export default function Canvas() {
   )
 }
 
-function Modal({ children, onClose, title }) {
+/* Legacy inline modal retained only as source history; all active dialogs use the shared portal Modal.
+function LegacyModal({ children, onClose, title }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
       <Card className="w-full max-w-xl">
@@ -633,3 +634,4 @@ function Modal({ children, onClose, title }) {
     </div>
   )
 }
+*/

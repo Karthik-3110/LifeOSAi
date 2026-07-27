@@ -4,7 +4,6 @@ import Card from '../components/ui/Card.jsx'
 import ProfileForm from '../components/settings/ProfileForm.jsx'
 import SettingsTabs from '../components/settings/SettingsTabs.jsx'
 import BillingPanel from '../components/settings/BillingPanel.jsx'
-import ThemeToggle from '../components/ui/ThemeToggle.jsx'
 import Button from '../components/ui/Button.jsx'
 import { useAuth } from '../context/useAuth.js'
 import { api } from '../lib/api.js'
@@ -53,7 +52,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="page-settings mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="font-display text-3xl font-bold text-text-primary sm:text-4xl">Settings</h1>
       <p className="mt-2 text-text-secondary">Manage your account, appearance, credits, billing, privacy, and support.</p>
       <div className="mt-8 grid gap-6 lg:grid-cols-[280px_1fr]">
@@ -63,10 +62,7 @@ export default function Settings() {
         ) : active === 'Appearance' ? (
           <Card>
             <h2 className="font-display text-2xl font-semibold text-text-primary">Appearance</h2>
-            <p className="mt-2 text-text-secondary">Switch between the saved light and dark interface themes.</p>
-            <div className="mt-8 flex justify-end">
-              <ThemeToggle />
-            </div>
+            <p className="mt-2 text-text-secondary">LifeOS AI uses a focused premium light interface designed for long planning sessions.</p>
           </Card>
         ) : active === 'Security' ? (
           <Card>

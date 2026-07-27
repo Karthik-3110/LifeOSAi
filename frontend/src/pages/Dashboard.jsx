@@ -7,6 +7,7 @@ import { api } from '../lib/api.js'
 import Badge from '../components/ui/Badge.jsx'
 import Button from '../components/ui/Button.jsx'
 import Card from '../components/ui/Card.jsx'
+import Modal from '../components/ui/Modal.jsx'
 import ProgressBar from '../components/ui/ProgressBar.jsx'
 import StatCard from '../components/ui/StatCard.jsx'
 import BillingPanel from '../components/settings/BillingPanel.jsx'
@@ -158,11 +159,11 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="page-dashboard mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
         <div>
-          <h1 className="font-display text-3xl font-bold text-text-primary sm:text-4xl">{greeting}, {user?.name || 'there'}.</h1>
-          <p className="mt-2 text-text-secondary">Here&apos;s what&apos;s on your plate.</p>
+          <h1 className="font-display text-4xl font-extrabold tracking-[-0.04em] text-text-primary sm:text-5xl">{greeting}, {user?.name || 'there'}.</h1>
+          <p className="mt-2 max-w-xl text-base text-text-secondary">Your command center for the goals, deadlines, and learning that matter next.</p>
         </div>
         <div className="flex gap-3">
           <Button onClick={() => { setEditingGoal(null); setGoalModalOpen(true) }}><Plus size={17} /> New goal</Button>
@@ -193,23 +194,23 @@ export default function Dashboard() {
         <StatCard label="Revision progress" value={`${asNumber(semester.revisionProgress)}%`} delta={`${asNumber(semester.completedRevisionTasks)} / ${asNumber(semester.totalRevisionTasks)} revision tasks`} />
       </div>
 
-      <Card className="mt-6">
-        <div className="flex items-center gap-2"><Bell className="text-accent-signal" size={19} /><h2 className="font-display text-xl font-semibold text-text-primary">Semester reminders</h2></div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">{notifications.length ? notifications.map((item) => <div key={item._id} className="rounded-xl border border-border-subtle bg-bg-base p-3"><p className="text-sm font-semibold text-text-primary">{asText(item.title)}</p><p className="mt-1 text-xs text-text-secondary">{asText(item.message)}</p></div>) : <p className="text-sm text-text-secondary">No new semester reminders.</p>}</div>
+      <Card className="mt-6 overflow-hidden">
+        <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-accent-signal/10 text-accent-signal"><Bell size={18} /></span><div><h2 className="font-display text-xl font-semibold text-text-primary">Semester reminders</h2><p className="text-xs text-text-muted">Stay one step ahead of your schedule.</p></div></div>
+        <div className="mt-5 grid gap-3 md:grid-cols-3">{notifications.length ? notifications.map((item) => <div key={item._id} className="group rounded-2xl border border-border-subtle bg-bg-elevated/80 p-4 transition hover:-translate-y-0.5 hover:border-node-task/25 hover:shadow-lg hover:shadow-node-task/5"><div className="flex gap-3"><span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-accent-signal shadow-[0_0_10px_rgba(236,78,32,.55)]" /><div><p className="text-sm font-semibold text-text-primary">{asText(item.title)}</p><p className="mt-1 text-xs leading-5 text-text-secondary">{asText(item.message)}</p></div></div></div>) : <p className="text-sm text-text-secondary">No new semester reminders.</p>}</div>
       </Card>
 
-      <Card className="mt-8">
+      <Card className="ai-surface mt-8 overflow-hidden border-node-task/20 bg-gradient-to-br from-node-task/10 via-bg-surface to-accent-signal/10">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
           <div>
-            <div className="flex items-center gap-2">
-              <Sparkles className="text-accent-signal" size={20} />
-              <h2 className="font-display text-2xl font-semibold text-text-primary">Daily AI Brief</h2>
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-full bg-node-task/15 text-node-task shadow-[0_0_22px_rgba(1,111,185,.18)]"><Sparkles size={20} /></span>
+              <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-node-task">LifeOS Intelligence</p><h2 className="font-display text-2xl font-bold text-text-primary">Daily AI Brief</h2></div>
             </div>
-            {asText(brief.greeting) && <p className="mt-2 text-sm font-medium text-accent-signal">{asText(brief.greeting)}</p>}
-            <p className="mt-2 text-text-secondary">{asText(brief.studyRecommendation, 'Create a Brain Dump to generate your student briefing.')}</p>
+            {asText(brief.greeting) && <p className="mt-4 text-sm font-semibold text-accent-signal">{asText(brief.greeting)}</p>}
+            <p className="mt-2 max-w-2xl text-text-secondary">{asText(brief.studyRecommendation, 'Create a Brain Dump to generate your student briefing.')}</p>
             {asText(brief.productivityNote) && <p className="mt-2 text-sm text-text-muted">{asText(brief.productivityNote)}</p>}
           </div>
-          <div className="rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm font-semibold text-text-secondary">
+          <div className="rounded-2xl border border-accent-signal/20 bg-accent-signal/10 px-4 py-3 text-sm font-semibold text-text-secondary">
             <Clock3 className="mr-2 inline text-accent-signal" size={16} />
             {Math.round(asNumber(brief.estimatedWorkloadMinutes) / 60 * 10) / 10}h planned
           </div>
@@ -217,7 +218,7 @@ export default function Dashboard() {
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           <BriefList title="Today's Priorities" items={asArray(brief.priorities)} empty="No priority tasks for today." />
           <BriefList title="Upcoming Deadlines" items={asArray(brief.upcomingDeadlines).map((item) => asText(asRecord(item).title))} empty="No urgent deadlines." />
-          <div className="rounded-xl border border-border-subtle bg-bg-base p-4">
+          <div className="rounded-2xl border border-node-task/15 bg-node-task/5 p-4">
             <p className="text-sm font-semibold text-text-primary">Productivity Score</p>
             <p className="mt-4 font-display text-4xl font-bold text-accent-signal">{asNumber(brief.productivityScore, asNumber(stats.productivityScore))}%</p>
           </div>
@@ -277,27 +278,24 @@ export default function Dashboard() {
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <QuickCard icon={Map} title="Open infinite canvas" to="/canvas" />
         <QuickCard icon={CalendarDays} title="Plan your week" to="/planner" />
-        <button onClick={() => setAssistantOpen(true)} className="rounded-2xl border border-border-subtle bg-bg-surface p-6 text-left transition hover:bg-bg-surface-hi focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-signal">
-          <Sparkles className="text-accent-signal" size={24} />
+        <button onClick={() => setAssistantOpen(true)} className="ai-surface rounded-[22px] border bg-bg-surface p-6 text-left transition hover:-translate-y-1 hover:bg-node-task/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-node-task">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-node-task/10 text-node-task"><Sparkles size={22} /></span>
           <p className="mt-5 font-display text-xl font-semibold text-text-primary">Ask LifeOS AI</p>
           <p className="mt-2 text-sm text-text-secondary">Open the assistant panel.</p>
         </button>
       </div>
 
       {assistantOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
-          <Card className="w-full max-w-md">
-            <h2 className="font-display text-2xl font-semibold text-text-primary">LifeOS Assistant</h2>
+        <Modal title="LifeOS Assistant" onClose={() => setAssistantOpen(false)} className="max-w-md">
             <p className="mt-3 text-text-secondary">Ask me to explain a topic, create flashcards, generate quiz questions, or break a goal into milestones.</p>
-            <div className="mt-6 rounded-xl border border-accent-signal/20 bg-accent-signal/10 p-4 text-sm text-accent-signal">
+            <div className="mt-6 rounded-2xl border border-node-task/20 bg-node-task/10 p-4 text-sm text-node-task">
               {coachAnswer || 'Want me to turn your Brain Dump into a study plan, flashcards, and a quiz?'}
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setAssistantOpen(false)}>Close</Button>
               <Button to="/canvas">Open canvas</Button>
             </div>
-          </Card>
-        </div>
+        </Modal>
       )}
 
       {goalModalOpen && (
@@ -358,7 +356,8 @@ function BriefList({ empty, items, title }) {
   )
 }
 
-function Modal({ children, onClose, title }) {
+/* Legacy inline modal retained only as source history; all active dialogs use the shared portal Modal.
+function LegacyModal({ children, onClose, title }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
       <Card className="w-full max-w-xl">
@@ -371,6 +370,7 @@ function Modal({ children, onClose, title }) {
     </div>
   )
 }
+*/
 
 function GoalModal({ goal, onClose, onSave }) {
   const [form, setForm] = useState({

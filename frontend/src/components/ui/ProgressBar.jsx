@@ -5,7 +5,7 @@ export default function ProgressBar({ value }) {
   return (
     <div className="h-2 w-full overflow-hidden rounded-full bg-bg-surface-hi" aria-label={`${progress}% complete`}>
       <div
-        className="h-full rounded-full bg-gradient-to-r from-accent-signal to-node-resource transition-all"
+        className="h-full rounded-full bg-gradient-to-r from-accent-signal to-accent-signal-hi transition-all duration-500"
         style={{ width: `${progress}%` }}
       />
     </div>

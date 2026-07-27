@@ -171,7 +171,7 @@ export default function Planner() {
   const selectedTaskDay = plannerDays.find((day) => day.id === taskBox.dayId) || plannerDays[0]
 
   return (
-    <div className="px-4 py-8 sm:px-6 lg:px-8">
+    <div className="page-planner px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>

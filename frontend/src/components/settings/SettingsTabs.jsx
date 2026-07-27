@@ -8,7 +8,7 @@ export default function SettingsTabs({ active, onChange }) {
           key={tab}
           onClick={() => onChange(tab)}
           className={`rounded-xl px-4 py-3 text-left text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-signal ${
-            active === tab ? 'bg-accent-signal text-text-primary' : 'text-text-secondary hover:bg-bg-surface-hi hover:text-text-primary'
+            active === tab ? 'bg-gradient-to-r from-accent-signal to-accent-signal-hi text-white shadow-[0_8px_20px_rgba(236,78,32,0.18)]' : 'text-text-secondary hover:bg-accent-signal/10 hover:text-accent-signal'
           }`}
         >
           {tab}

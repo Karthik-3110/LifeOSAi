@@ -7,7 +7,7 @@ function GoalNode({ data, selected }) {
   const completed = Boolean(data.completed)
 
   return (
-    <div className={`min-w-52 rounded-2xl border bg-bg-surface p-4 shadow-xl transition ${completed ? 'opacity-80 ring-2 ring-node-resource/25' : ''} ${selected ? 'border-node-goal' : 'border-node-goal/40'}`}>
+    <div className={`canvas-node-card min-w-52 rounded-2xl border bg-bg-surface p-4 shadow-xl transition ${completed ? 'opacity-80 ring-2 ring-node-resource/25' : ''} ${selected ? 'border-node-task ring-2 ring-node-task/25 shadow-[0_0_30px_rgba(1,111,185,.22)]' : 'border-node-goal/40'}`}>
       <Handle type="target" position={Position.Top} className="!bg-node-goal" />
       <div className="flex items-center justify-between gap-3">
         <Badge color="goal">Goal</Badge>

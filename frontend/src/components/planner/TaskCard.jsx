@@ -27,7 +27,7 @@ function TaskCard({ task, onDelete, onToggle }) {
         event.stopPropagation()
         onToggle(task)
       }}
-      className={`cursor-grab rounded-xl border border-border-subtle bg-bg-base p-4 shadow-lg shadow-black/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-signal ${
+      className={`planner-task-card cursor-grab rounded-2xl border border-border-subtle bg-bg-surface p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-node-task ${
         isDragging ? 'opacity-50' : ''
       }`}
     >
@@ -66,7 +66,7 @@ function TaskCard({ task, onDelete, onToggle }) {
         </button>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-bg-surface-hi">
-        <span className="block h-full rounded-full bg-accent-signal transition-all" style={{ width: `${task.progress || 0}%` }} />
+        <span className="block h-full rounded-full bg-accent-signal transition-all duration-500" style={{ width: `${task.progress || 0}%` }} />
       </div>
     </div>
   )
