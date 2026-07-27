@@ -2,6 +2,19 @@ import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
+const timetableLectureSchema = new Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    day: { type: String, required: true, enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] },
+    startTime: { type: String, required: true, match: /^([01][0-9]|2[0-3]):[0-5][0-9]$/ },
+    endTime: { type: String, required: true, match: /^([01][0-9]|2[0-3]):[0-5][0-9]$/ },
+    subject: { type: String, required: true, trim: true, maxlength: 120 },
+    room: { type: String, trim: true, maxlength: 120, default: "" },
+    faculty: { type: String, trim: true, maxlength: 120, default: "" },
+  },
+  { _id: false },
+);
+
 const semesterSchema = new Schema(
   {
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
@@ -16,7 +29,7 @@ const semesterSchema = new Schema(
     exams: { type: [Schema.Types.Mixed], default: [] },
     // Kept distinct from planner tasks: these are scheduled college lectures,
     // not work that the student needs to complete.
-    collegeTimetable: { type: [Schema.Types.Mixed], default: [] },
+    collegeTimetable: { type: [timetableLectureSchema], default: [] },
     calendar: { type: [Schema.Types.Mixed], default: [] },
     studyPlan: { type: [Schema.Types.Mixed], default: [] },
     revisionPlan: { type: [Schema.Types.Mixed], default: [] },

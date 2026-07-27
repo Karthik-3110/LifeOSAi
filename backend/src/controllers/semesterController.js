@@ -285,19 +285,33 @@ export const deleteSemesterItem = asyncHandler(async (req, res) => {
   await responseWithSemester(res, req.user._id, semester, `${item.title} was removed from Planner.`);
 });
 
-const timetableEntry = (input) => ({
-  id: input.id || `lecture-${randomUUID()}`,
-  day: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].includes(input.day) ? input.day : "Monday",
-  startTime: cleanText(input.startTime).slice(0, 5),
-  endTime: cleanText(input.endTime).slice(0, 5),
-  subject: cleanText(input.subject),
-  room: cleanText(input.room),
-  faculty: cleanText(input.faculty),
-});
+const timetableDays = new Set(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]);
+const timetableTime = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+
+const timetableEntry = (input, id = `lecture-${randomUUID()}`) => {
+  const lecture = {
+    id,
+    day: cleanText(input.day),
+    startTime: cleanText(input.startTime).slice(0, 5),
+    endTime: cleanText(input.endTime).slice(0, 5),
+    subject: cleanText(input.subject).slice(0, 120),
+    room: cleanText(input.room).slice(0, 120),
+    faculty: cleanText(input.faculty).slice(0, 120),
+  };
+  const details = [];
+  if (!timetableDays.has(lecture.day)) details.push({ field: "day", message: "Choose a valid weekday." });
+  if (!timetableTime.test(lecture.startTime)) details.push({ field: "startTime", message: "Start time must use HH:MM (24-hour) format." });
+  if (!timetableTime.test(lecture.endTime)) details.push({ field: "endTime", message: "End time must use HH:MM (24-hour) format." });
+  if (!lecture.subject) details.push({ field: "subject", message: "Subject is required." });
+  if (timetableTime.test(lecture.startTime) && timetableTime.test(lecture.endTime) && lecture.startTime >= lecture.endTime) details.push({ field: "endTime", message: "End time must be later than start time." });
+  if (details.length) throw new ApiError(400, details[0].message, "INVALID_TIMETABLE_LECTURE", details);
+  return lecture;
+};
 
 export const addTimetableLecture = asyncHandler(async (req, res) => {
   const semester = await Semester.findOne({ _id: req.params.id, userId: req.user._id });
   if (!semester) throw new ApiError(404, "Semester plan not found.", "SEMESTER_NOT_FOUND");
+  if (asArray(semester.collegeTimetable).length >= 200) throw new ApiError(400, "A semester can contain at most 200 timetable lectures.", "TIMETABLE_LIMIT_REACHED");
   const lecture = timetableEntry(req.body);
   semester.collegeTimetable = [...asArray(semester.collegeTimetable), lecture];
   semester.markModified("collegeTimetable");
@@ -310,7 +324,7 @@ export const updateTimetableLecture = asyncHandler(async (req, res) => {
   if (!semester) throw new ApiError(404, "Semester plan not found.", "SEMESTER_NOT_FOUND");
   const current = asArray(semester.collegeTimetable).find((item) => item.id === req.params.lectureId);
   if (!current) throw new ApiError(404, "Lecture not found.", "LECTURE_NOT_FOUND");
-  const lecture = timetableEntry({ ...current, ...req.body, id: current.id });
+  const lecture = timetableEntry({ ...current.toObject?.() || current, ...req.body }, current.id);
   semester.collegeTimetable = asArray(semester.collegeTimetable).map((item) => item.id === current.id ? lecture : item);
   semester.markModified("collegeTimetable");
   await semester.save();
@@ -320,6 +334,8 @@ export const updateTimetableLecture = asyncHandler(async (req, res) => {
 export const deleteTimetableLecture = asyncHandler(async (req, res) => {
   const semester = await Semester.findOne({ _id: req.params.id, userId: req.user._id });
   if (!semester) throw new ApiError(404, "Semester plan not found.", "SEMESTER_NOT_FOUND");
+  const lecture = asArray(semester.collegeTimetable).find((item) => item.id === req.params.lectureId);
+  if (!lecture) throw new ApiError(404, "Lecture not found.", "LECTURE_NOT_FOUND");
   semester.collegeTimetable = asArray(semester.collegeTimetable).filter((item) => item.id !== req.params.lectureId);
   semester.markModified("collegeTimetable");
   await semester.save();

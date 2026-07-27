@@ -49,6 +49,15 @@ export function warmBackend() {
   return backendWarmup
 }
 
+const timetablePayload = (lecture = {}) => ({
+  day: String(lecture.day || '').trim(),
+  startTime: String(lecture.startTime || '').trim(),
+  endTime: String(lecture.endTime || '').trim(),
+  subject: String(lecture.subject || '').trim(),
+  room: String(lecture.room || '').trim(),
+  faculty: String(lecture.faculty || '').trim(),
+})
+
 export const api = {
   health: () => apiRequest('/health'),
   me: () => apiRequest('/auth/me'),
@@ -86,8 +95,8 @@ export const api = {
   addSemesterItem: (semesterId, type, body) => apiRequest(`/semesters/${semesterId}/items/${type}`, { method: 'POST', body: JSON.stringify(body) }),
   updateSemesterItem: (semesterId, type, itemId, body) => apiRequest(`/semesters/${semesterId}/items/${type}/${itemId}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteSemesterItem: (semesterId, type, itemId) => apiRequest(`/semesters/${semesterId}/items/${type}/${itemId}`, { method: 'DELETE' }),
-  addTimetableLecture: (semesterId, body) => apiRequest(`/semesters/${semesterId}/timetable`, { method: 'POST', body: JSON.stringify(body) }),
-  updateTimetableLecture: (semesterId, lectureId, body) => apiRequest(`/semesters/${semesterId}/timetable/${lectureId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  addTimetableLecture: (semesterId, body) => apiRequest(`/semesters/${semesterId}/timetable`, { method: 'POST', body: JSON.stringify(timetablePayload(body)) }),
+  updateTimetableLecture: (semesterId, lectureId, body) => apiRequest(`/semesters/${semesterId}/timetable/${lectureId}`, { method: 'PATCH', body: JSON.stringify(timetablePayload(body)) }),
   deleteTimetableLecture: (semesterId, lectureId) => apiRequest(`/semesters/${semesterId}/timetable/${lectureId}`, { method: 'DELETE' }),
   listNotifications: () => apiRequest('/notifications'),
   markNotificationRead: (id) => apiRequest(`/notifications/${id}/read`, { method: 'PATCH' }),

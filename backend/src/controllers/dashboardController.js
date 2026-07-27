@@ -74,7 +74,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
       .limit(10)
       .lean(),
     Semester.findOne({ userId: req.user._id, status: "active" })
-      .select("name subjects assignments projects exams")
+      .select("name subjects assignments projects exams collegeTimetable")
       .sort({ updatedAt: -1 })
       .lean(),
     Goal.find({
@@ -200,6 +200,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
       subjectCount: asArray(activeSemester.subjects).length,
       upcomingExamCount: semesterExams.length,
       assignmentCount: asArray(activeSemester.assignments).length,
+      collegeTimetable: asArray(activeSemester.collegeTimetable),
       nextExam: nextExam ? { title: nextExam.title, subject: nextExam.subject, date: nextExam.date, daysRemaining: Math.ceil((new Date(nextExam.date) - today) / 86400000) } : null,
       nextAssignment: nextAssignment ? { title: nextAssignment.title, subject: nextAssignment.subject, date: nextAssignment.date, daysRemaining: Math.ceil((new Date(nextAssignment.date) - today) / 86400000) } : null,
       revisionProgress,
