@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { router } from './router.jsx'
 import ErrorBoundary from './components/layout/ErrorBoundary.jsx'
 
+
 export default function App() {
   return (
     <ErrorBoundary>
