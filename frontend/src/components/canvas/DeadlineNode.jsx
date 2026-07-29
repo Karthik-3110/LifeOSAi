@@ -3,6 +3,7 @@ import { Handle, Position } from '@xyflow/react'
 import { CheckCircle2 } from 'lucide-react'
 import Badge from '../ui/Badge.jsx'
 
+
 function DeadlineNode({ data, selected }) {
   const completed = Boolean(data.completed)
 
