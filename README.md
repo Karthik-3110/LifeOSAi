@@ -1,4 +1,3 @@
 
 
-link- https://lifeosai.o
-nrender.com/
+link- https://lifeosai.onrender.com/
